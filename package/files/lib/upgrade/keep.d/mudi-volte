@@ -1,0 +1,4 @@
+# mudi-volte: a firmware update that keeps the settings keeps these too, so
+# that installing the package again brings the phone line back as it was.
+/etc/config/mudi-volte
+/etc/mudi-volte/
