@@ -38,7 +38,22 @@ init_stub() { echo "init $*" >>"$SB/events"; }
 imsd_stub() { echo "qr" >>"$SB/events"; exec sleep "${QR_SECS:-0.05}"; }
 helper_stub() { [ "$*" = check ] && [ "${LIBRARY:-available}" = available ]; }
 screen_stub() { echo "screen $*" >>"$SB/events"; }
-pidof() { return 1; }
+mudi_screen_stub() {
+ # MUDI_SCREEN: on (it has the display), off (installed, GL.iNet's screen in
+ # use), absent (not installed: no such start script).
+ [ "${MUDI_SCREEN:-off}" = absent ] && return 127
+ if [ "$1" = running ]; then [ "${MUDI_SCREEN:-off}" = on ]; return; fi
+ echo "mudi-screen $*" >>"$SB/events"
+}
+# PIDOF: the programs that run ("mudi-screen" for MudiScreen's collector).
+pidof() { for p; do case " ${PIDOF:-} " in *" $p "*) return 0 ;; esac; done; return 1; }
+# The display stays busy for as many checks as $SB/busy says.
+display_busy() {
+ n=$(cat "$SB/busy" 2>/dev/null || echo 0)
+ [ "$n" -gt 0 ] || return 1
+ echo $((n - 1)) >"$SB/busy"
+ echo busy >>"$SB/events"
+}
 ask() { [ "${AGREE:-yes}" = yes ]; }
 check_device() { :; }
 phone_users() { echo alpha; }
@@ -74,6 +89,7 @@ class Lifecycle(unittest.TestCase):
         self.sb = Path(self.tmp.name)
         # Replace even unused absolute paths: a mistake must not affect the host.
         src = SOURCE.replace("/etc/init.d/gl_screen", "screen_stub")
+        src = src.replace("/etc/init.d/mudi-screen", "mudi_screen_stub")
         src = src.replace("/etc/config/mudi-volte", str(self.sb / "config"))
         self.base = src + "\n" + STUBS
 
@@ -198,6 +214,48 @@ build_config
         self.assertEqual(self.read("events").splitlines(),
                          ["screen stop", "qr", "qr", "screen start"])
         self.assertFalse((self.sb / "screen.pid").exists())
+
+    def test_qr_without_mudiscreen(self):
+        # MudiScreen not installed: GL.iNet's screen is stopped for the code and
+        # started again, as in 0.1.0, and nothing asks for MudiScreen.
+        (self.sb / "busy").write_text("2")
+        r = self.run_case("screen_loop alpha 1 url", QR_SECS="0.05", MUDI_SCREEN="absent")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read("events").splitlines(),
+                         ["screen stop", "busy", "busy", "qr", "screen start"])
+        self.assertFalse((self.sb / "screen.pid").exists())
+
+    def test_qr_with_mudiscreen_installed_but_not_in_use(self):
+        # MudiScreen installed, GL.iNet's screen chosen (mudi-screen-mode stock):
+        # its traffic collector runs as "mudi-screen" all along. The code waits
+        # for the display, not for that process, which would never end.
+        start = time.monotonic()
+        r = self.run_case("screen_loop alpha 1 url", QR_SECS="0.05", MUDI_SCREEN="off",
+                          PIDOF="mudi-screen")
+        took = time.monotonic() - start
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read("events").splitlines(), ["screen stop", "qr", "screen start"])
+        self.assertLess(took, 3, "the code waited for the collector")
+
+    def test_qr_gives_the_display_back_to_mudiscreen(self):
+        # MudiScreen runs instead of gl_screen: it is stopped for the code and
+        # started again after the last one, even when the second call comes
+        # while it is stopped (no longer "running").
+        first = subprocess.Popen(SHELL + [str(self.script("screen_loop alpha 30 url", "first.sh"))],
+                                 env={**os.environ, "SB": str(self.sb), "QR_SECS": "10", "MUDI_SCREEN": "on"},
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.addCleanup(lambda: first.poll() is None and first.terminate())
+        for _ in range(100):
+            if "qr" in self.read("events"):
+                break
+            time.sleep(0.01)
+        second = self.run_case("screen_loop beta 1 url", QR_SECS="0.05", MUDI_SCREEN="off")
+        first.wait(timeout=3)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual(self.read("events").splitlines(),
+                         ["mudi-screen stop", "qr", "qr", "mudi-screen start"])
+        self.assertFalse((self.sb / "screen.pid").exists())
+        self.assertFalse((self.sb / "screen.pid.owner").exists())
 
 
 def swap(text, old, new):

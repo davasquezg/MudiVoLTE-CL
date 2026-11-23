@@ -107,6 +107,19 @@ func (m *modem) waitService(ctx context.Context, timeout time.Duration) error {
 	}
 }
 
+// radioOff tells whether the radio is off on the router: AT+CFUN? answers
+// other than 1 (4 is the flight mode that GL's airplane mode sets, 0 the
+// minimum). An answer that cannot be read is no "off": the line must not
+// wait on a reply it does not understand.
+func (m *modem) radioOff(ctx context.Context) (bool, error) {
+	out, err := m.link.query(ctx, "AT+CFUN?")
+	if err != nil {
+		return false, err
+	}
+	fun, ok := parseCFUN(out)
+	return ok && fun != 1, nil
+}
+
 // radioCycle does CFUN 4→1: after a visit to 3G, bringing the PDN up again is
 // not enough, the network keeps routing calls past IMS (§87). The router
 // loses the Internet for some 10–30 seconds.
@@ -163,6 +176,16 @@ func parseQCFGIMS(out string) (int, bool) {
 		return 0, false
 	}
 	v, err := strconv.Atoi(f[1])
+	return v, err == nil
+}
+
+// parseCFUN — +CFUN: <fun> → fun (1 full, 4 flight mode, 0 minimum).
+func parseCFUN(out string) (int, bool) {
+	f, err := atFields(out, "+CFUN:")
+	if err != nil || len(f) < 1 {
+		return 0, false
+	}
+	v, err := strconv.Atoi(f[0])
 	return v, err == nil
 }
 

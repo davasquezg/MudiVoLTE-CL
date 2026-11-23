@@ -1,0 +1,9 @@
+{
+  "api": 1,
+  "id": "volte",
+  "name": "Calls (VoLTE)",
+  "order": 30,
+  "command": "app.sh",
+  "interval": 5,
+  "requires": ["/usr/sbin/mudi-volte"]
+}

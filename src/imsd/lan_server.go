@@ -94,7 +94,10 @@ func startLANSIP(cfg SIPConfig, mgr *callManager, logger *slog.Logger) (*lanSIP,
 	if err != nil {
 		return nil, err
 	}
-	// sipgo logs: warnings and above only (too noisy otherwise).
+	// sipgo logs: warnings and above only (too noisy otherwise). sipgo keeps
+	// one default logger for the whole process, without a lock, and the UA
+	// below takes it when made. The daemon sets it once, before any sipgo
+	// goroutine runs; the tests once per rig (testLogWriter in lan_test.go).
 	sipLog := slog.New(slog.NewTextHandler(io.Discard, nil))
 	if logger != nil {
 		sipLog = slog.New(levelFilter{h: logger.Handler(), min: slog.LevelWarn})

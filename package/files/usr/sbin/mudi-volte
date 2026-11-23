@@ -554,9 +554,10 @@ phone_add() {
 }
 
 # phone screen NAME [SECONDS]: the connection QR code on the router's own display,
-# so the phone can scan it without a computer. gl_screen (GL.iNet's LVGL user
-# interface) owns the display and has no API for extra pages, so the background
-# half of this command stops it for the duration and starts it again afterwards.
+# so the phone can scan it without a computer. The program on the display,
+# GL.iNet's gl_screen or MudiScreen when it runs instead, has no page for it, so
+# the background half of this command stops that program for the duration and
+# starts it again afterwards.
 screen_show() {
 	local name=$1 secs=${2:-90} url
 	[ -n "$(phone_section "$name")" ] || die "no phone named \"$name\""
@@ -570,30 +571,58 @@ screen_show() {
 	say "Shown on the router's display for $secs s, then it closes by itself. A tap closes it early only when the display was already awake (while mudi-volte owns the screen the touch controller does not report to it from sleep)."
 }
 
+# screen_service: the start script of the program on the display: MudiScreen,
+# an open user interface for the Mudi 7 touchscreen, when it runs, otherwise
+# GL.iNet's gl_screen.
+screen_service() {
+	if /etc/init.d/mudi-screen running >/dev/null 2>&1; then
+		echo /etc/init.d/mudi-screen
+	else
+		echo /etc/init.d/gl_screen
+	fi
+}
+
+# display_busy: a program still has the display (/dev/fb0) open or mapped.
+# Asked of the display, not by the name of a program: MudiScreen's traffic
+# collector is a process named mudi-screen too, it runs whichever program
+# has the display, and it never draws.
+display_busy() {
+	{
+		ls -l /proc/[0-9]*/fd/
+		cat /proc/[0-9]*/maps
+	} 2>/dev/null | grep -q /dev/fb0
+}
+
 # The background half of "phone screen" (a separate process, so \$\$ and traps are
 # its own). A second call hands the display over: the previous process gets USR1
-# and exits without starting gl_screen, the new one skips stopping it.
+# and exits without starting the program of the display, the new one skips
+# stopping it and starts it at the end (named in $SCREEN_PID.owner).
 screen_loop() {
 	local name=$1 secs=$2 url=$3 old
-	# EXIT runs after this function returns: these two must outlive its locals.
-	child='' handoff=0
+	# EXIT runs after this function returns: these must outlive its locals.
+	child='' handoff=0 owner=''
 	old=$(cat "$SCREEN_PID" 2>/dev/null)
 	if [ -n "$old" ] && kill -0 "$old" 2>/dev/null; then
+		owner=$(cat "$SCREEN_PID.owner" 2>/dev/null)
 		kill -USR1 "$old"
 		sleep 1
 	else
-		/etc/init.d/gl_screen stop >/dev/null 2>&1
-		# gl_screen ignores SIGTERM; procd sends SIGKILL after 5 s. Draw only once it
-		# is gone, or its last repaint lands on top of the code.
+		owner=$(screen_service)
+		"$owner" stop >/dev/null 2>&1
+		# gl_screen ignores SIGTERM; procd sends SIGKILL after 5 s. Draw only once
+		# the display is free, or the last repaint of its program lands on top
+		# of the code.
 		local i=0
-		while pidof gl_screen >/dev/null 2>&1 && [ $i -lt 80 ]; do
+		while display_busy && [ $i -lt 80 ]; do
 			sleep 0.1
 			i=$((i + 1))
 		done
 	fi
+	[ -n "$owner" ] || owner=/etc/init.d/gl_screen
 	echo $$ >"$SCREEN_PID"
+	echo "$owner" >"$SCREEN_PID.owner"
 	trap 'handoff=1; kill $child 2>/dev/null' USR1
-	trap 'kill $child 2>/dev/null; [ "$handoff" = 1 ] || /etc/init.d/gl_screen start >/dev/null 2>&1; [ "$(cat "$SCREEN_PID" 2>/dev/null)" = "$$" ] && rm -f "$SCREEN_PID"' EXIT
+	trap 'kill $child 2>/dev/null; [ "$handoff" = 1 ] || "$owner" start >/dev/null 2>&1; [ "$(cat "$SCREEN_PID" 2>/dev/null)" = "$$" ] && rm -f "$SCREEN_PID" "$SCREEN_PID.owner"' EXIT
 	$IMSD screen-qr -name "$name" -seconds "$secs" "$url" &
 	child=$!
 	wait $child

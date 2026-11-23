@@ -15,8 +15,9 @@ import (
 
 type serviceState struct {
 	// Phase: starting | modem | pdn | registering | registered | recovering |
-	// radio-restart | stopped.
+	// radio-restart | radio-off | stopped.
 	Phase      string    `json:"phase"`
+	Call       *liveCall `json:"call,omitempty"` // the call of the line, if one is on
 	Registered bool      `json:"registered"`
 	Since      time.Time `json:"since"`
 	Number     string    `json:"number,omitempty"`
@@ -54,6 +55,7 @@ type stateWriter struct {
 	// not the other.
 	now, mono        func() time.Time
 	phaseAt, errorAt time.Time // on mono
+	callAt           time.Time // on mono: the start of the call's phase
 }
 
 func newStateWriter(path string, log *slog.Logger) *stateWriter {
@@ -76,6 +78,27 @@ func (w *stateWriter) update(fn func(s *serviceState)) {
 	w.writeLocked()
 }
 
+// setCall puts the call of the line in the file (nil: none) and returns the
+// one that was there.
+func (w *stateWriter) setCall(c *liveCall) *liveCall {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	prev := w.s.Call
+	if c == nil && prev == nil {
+		return nil
+	}
+	if c != nil {
+		cp := *c
+		if prev == nil || prev.Dir != cp.Dir || prev.Phase != cp.Phase {
+			w.callAt = w.mono()
+		}
+		c = &cp
+	}
+	w.s.Call = c
+	w.writeLocked()
+	return prev
+}
+
 func (w *stateWriter) fail(err error) {
 	if err == nil {
 		return
@@ -91,6 +114,9 @@ func (w *stateWriter) fail(err error) {
 func (w *stateWriter) writeLocked() {
 	now, mono := w.now(), w.mono()
 	w.s.Since = now.Add(-mono.Sub(w.phaseAt))
+	if w.s.Call != nil {
+		w.s.Call.Start = now.Add(-mono.Sub(w.callAt)).Unix()
+	}
 	if !w.errorAt.IsZero() {
 		t := now.Add(-mono.Sub(w.errorAt))
 		w.s.LastErrorAt = &t

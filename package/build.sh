@@ -72,7 +72,8 @@ done
 find "$work/data" -type d -exec chmod 0755 {} +
 find "$work/data" -type f -exec chmod 0644 {} +
 chmod 0755 "$work/data/usr/sbin/mudi-imsd" "$work/data/usr/sbin/mudi-dsi-helper" \
-	"$work/data/usr/sbin/mudi-volte" "$work/data/etc/init.d/mudi-volte"
+	"$work/data/usr/sbin/mudi-volte" "$work/data/etc/init.d/mudi-volte" \
+	"$work/data/usr/share/mudi-screen/apps/volte/app.sh"
 chmod 0600 "$work/data/etc/config/mudi-volte" # phones' SIP passwords end up here
 
 size=$(du -sk "$work/data" | cut -f1)

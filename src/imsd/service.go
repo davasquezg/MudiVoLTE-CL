@@ -41,6 +41,7 @@ const (
 	endHelper      = "helper-unusable" // the helper cannot work on this installation
 	endHelperFail  = "helper-failed"   // the data call failed on the router, without the network
 	endPDNLost     = "pdn-lost"
+	endRadioOff    = "radio-off" // the radio was turned off on the router (airplane mode)
 	endRAT         = "rat-fallback"
 	endReg         = "registration-failed"
 	endSetup       = "setup-failed"
@@ -142,6 +143,11 @@ func runService(cfg *Config, logger *slog.Logger) error {
 		sc.PhonesFile = cfg.phonesFile()
 		sc.PushFile = cfg.pushFile()
 		s.mgr = newCallManager(cfg, sc, s.net, logger)
+		s.mgr.onCall = func(c *liveCall) {
+			if prev := s.state.setCall(c); !sameCall(prev, c) {
+				mudiScreen.callChanged(prev, c)
+			}
+		}
 		lan, err := startLANSIP(sc, s.mgr, logger)
 		if err != nil {
 			s.state.fail(fmt.Errorf("SIP server: %w", err))
@@ -232,6 +238,7 @@ func (s *service) loop(ctx context.Context) {
 	// a row: since the last registration or radio restart, either of which
 	// starts the count anew.
 	strikes := 0
+	radioOff := false // the radio is off on the router, as the last session found
 	for ctx.Err() == nil {
 		if !swept {
 			swept, stage = s.sweepStale(ctx, stage), "retry"
@@ -240,6 +247,22 @@ func (s *service) loop(ctx context.Context) {
 		reason, registered, err := s.session(ctx)
 		if ctx.Err() != nil {
 			return
+		}
+		if reason == endRadioOff {
+			// GL's airplane mode (the admin panel, the touchscreen) or
+			// someone else turned the radio off: no failure, and nothing
+			// for this service to restart. It waits until the radio is on.
+			if !radioOff {
+				s.log.Warn("service: the radio is off on the router (airplane mode): waiting until it is on")
+			}
+			radioOff, failures, strikes = true, 0, 0
+			s.state.update(func(st *serviceState) { st.Phase, st.Registered = "radio-off", false })
+			_ = s.sleep(ctx, 30*time.Second)
+			continue
+		}
+		if radioOff {
+			s.log.Info("service: the radio is on again")
+			radioOff = false
 		}
 		s.log.Warn("service: IMS session ended", "reason", reason, "err", err)
 		if err != nil {
@@ -284,6 +307,14 @@ func (s *service) loop(ctx context.Context) {
 			failures, strikes = 0, 0 // not a failure: wait until the modem is put back into external mode
 			_ = s.sleep(ctx, 30*time.Second)
 			continue
+		}
+		if cycle {
+			// Turning the radio off and on would end an airplane mode
+			// that was switched on meanwhile.
+			if off, err := s.modem.radioOff(ctx); err == nil && off {
+				s.log.Warn("service: radio restart skipped: the radio is off on the router (airplane mode)")
+				cycle = false
+			}
 		}
 		cycles = recentOnly(cycles, time.Hour)
 		if cycle && len(cycles) >= maxRadioCycles {
@@ -385,6 +416,9 @@ func (s *service) bringUp(ctx context.Context, tr *regTracker) (string, error) {
 	}
 	if !ext {
 		return endNotExternal, errors.New("the modem is not in External VoLTE mode (run: mudi-volte setup)")
+	}
+	if off, err := s.modem.radioOff(ctx); err == nil && off {
+		return endRadioOff, errors.New("the radio is off (airplane mode)")
 	}
 	if err := s.modem.waitService(ctx, 3*time.Minute); err != nil {
 		return endNoLTE, err

@@ -17,7 +17,9 @@ between the network and a SIP phone, phone setup by QR code, encrypted calls
 (SIP over TLS, SRTP), incoming calls on an iPhone with Linphone in the
 background (push), a phone away from home over Tailscale (sign-in and the echo
 test), web pages in the GL admin panel and LuCI, incoming calls with a second
-SIM or the built-in eSIM active next to the SIM of the line.
+SIM or the built-in eSIM active next to the SIM of the line. On 4.10.2: the
+firmware update from 4.10.0 with Keep Settings, registration, and an incoming
+call answered on an iPhone woken by a push.
 
 > **Before you start.** Emergency numbers (112, 911, 999 and the like) are
 > not guaranteed to work through MudiVoLTE: keep a phone with its own SIM for
@@ -128,6 +130,18 @@ in the terminal: `mudi-volte phone show NAME`.
 `mudi-volte phone screen NAME` shows it on the router's own display for 90
 seconds.
 
+The line needs nothing on the router's display: with GL.iNet's own screen it
+works the same. When the router runs MudiScreen, an open user interface for
+its touchscreen, the line has a card of its own there with the phones and the
+missed calls, and a call shows while it is on: an incoming call lights the
+display with a notice until it is answered, and the card, the lock screen and
+the status bar show the call with its running time. A missed call lights the
+display with a notice too. The lock screen and the notices show no number,
+because they show before the passcode; the number shows behind it, on the
+card and the page of the line. The package keeps this app in
+`/usr/share/mudi-screen/apps/volte`; without MudiScreen the files do nothing
+and the notices go nowhere.
+
 The code links to `http://192.168.8.1:8060/p/<token>`, where the router hands the
 phone its account. Besides the account, the code switches on G.722 in Linphone
 (Linphone ships with it off, so calls would be narrowband) and, on Android, the
@@ -193,7 +207,7 @@ that checks the chat without the mobile network.
 
 | Command | What it does |
 |---|---|
-| `mudi-volte status` | Is the SIM registered, which phones are connected |
+| `mudi-volte status` | Is the SIM registered, which phones are connected, the call on the line |
 | `mudi-volte missed` | Calls that no phone answered: time, number, reason |
 | `mudi-volte sms` | SMS to the SIM, newest first |
 | `mudi-volte phone list` | Phone accounts, online or not |
@@ -293,8 +307,8 @@ service starts by itself with the same phones, certificate and pushes, the
 phones need no new QR codes, and `mudi-volte uninstall` still knows the
 modem's settings from before the setup. After the update the GL admin panel offers to reinstall the packages
 you had; that cannot bring this one back, because it is not in GL's
-repository. Only firmware 4.10.0 has been tested: after an update, check
-`mudi-volte status`.
+repository. Tested with the update from 4.10.0 to 4.10.2: after an update,
+check `mudi-volte status`.
 
 Without Keep Settings the phones and the saved modem settings are gone.
 Installing the package again sets up a new line with new QR codes;
@@ -476,7 +490,8 @@ test tool or terminal is involved. The helper checks that the library loads and
 exports the required functions, then checks the result of each call. A broken
 installation, or a call that fails on the router rather than in the network,
 is reported without restarting the modem's radio. This path has
-been tested on GL firmware 4.10.0; other versions still need device validation.
+been tested on GL firmware 4.10.0 and 4.10.2; other versions still need device
+validation.
 
 During setup, `mudi-volte setup` switches the modem to this mode and makes
 voice IMS-only, so that the network never moves a call to 3G, where the modem

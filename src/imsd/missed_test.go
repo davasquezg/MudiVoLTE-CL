@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -199,5 +200,28 @@ func TestSIPMissedCalls(t *testing.T) {
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("records:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+func TestMissedLogNotifies(t *testing.T) {
+	l := newMissedLog(filepath.Join(t.TempDir(), "missed.jsonl"), nil)
+	calls := make(chan struct{}, 4)
+	l.notify = func() { calls <- struct{}{} }
+	l.add("+447700900123", missedNoAnswer)
+	select {
+	case <-calls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("no notice for a missed call")
+	}
+	// A caller the list does not allow rings nobody, and lights nothing.
+	l.add("+447700900456", missedNotAllowed)
+	select {
+	case <-calls:
+		t.Fatal("notice for a caller that is not allowed")
+	case <-time.After(100 * time.Millisecond):
+	}
+	// The notice shows before the passcode: valid JSON, and no number in it.
+	if !json.Valid([]byte(screenNotice)) || strings.Contains(screenNotice, "+") {
+		t.Fatalf("bad notice %s", screenNotice)
 	}
 }

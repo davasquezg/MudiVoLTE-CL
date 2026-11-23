@@ -67,6 +67,7 @@ jobs:
             package/install.sh.in package/build.sh \
             package/control/postinst package/control/prerm package/control/postrm \
             package/files/usr/sbin/mudi-volte package/files/etc/init.d/mudi-volte \
+            package/files/usr/share/mudi-screen/apps/volte/app.sh \
             package/tests/run.sh package/toolchain/*.sh scripts/*.sh
       - name: Setup, restore and display lifecycle
         run: python3 package/tests/lifecycle.test.py

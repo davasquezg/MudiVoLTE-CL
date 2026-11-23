@@ -106,6 +106,10 @@ type callManager struct {
 	active *lineCall
 	seq    int64
 
+	// onCall hears of the call of the line (nil: none) at each of its
+	// turns: ringing, talking, over. nil tells nobody.
+	onCall func(*liveCall)
+
 	// Pushed devices whose call ended before they came back (ringer.go).
 	lateMu sync.Mutex
 	late   map[string]latePush
@@ -136,10 +140,14 @@ func (m *callManager) acquire(dir string) (*lineCall, bool) {
 
 func (m *callManager) release(lc *lineCall) {
 	m.mu.Lock()
-	if m.active == lc {
+	was := m.active == lc
+	if was {
 		m.active = nil
 	}
 	m.mu.Unlock()
+	if was && m.onCall != nil {
+		m.onCall(nil)
+	}
 	lc.cancel()
 	lc.mu.Lock()
 	leg, peer := lc.leg, lc.peer
@@ -150,6 +158,28 @@ func (m *callManager) release(lc *lineCall) {
 	if peer != nil {
 		peer.Close()
 	}
+}
+
+// show tells onCall about lc, when it is still the line's call.
+func (m *callManager) show(lc *lineCall, c *liveCall) {
+	if m.onCall == nil {
+		return
+	}
+	m.mu.Lock()
+	cur := m.active == lc
+	m.mu.Unlock()
+	if cur {
+		m.onCall(c)
+	}
+}
+
+// shownNumber is the number of the other side as others see it: "" when
+// it is hidden.
+func shownNumber(from string) string {
+	if n := callerUser(from); n != "anonymous" {
+		return n
+	}
+	return ""
 }
 
 func (m *callManager) current() *lineCall {
@@ -396,6 +426,7 @@ func (m *callManager) runIncoming(lc *lineCall, call imsCall, from string) {
 	}
 
 	m.logger.Info("incoming: ringing the phones", "from", masked, "phones", len(r.live), "pushed", len(r.sleeping))
+	m.show(lc, &liveCall{Dir: "in", Phase: "ringing", Peer: shownNumber(from)})
 	ringCtx, ringCancel := context.WithTimeout(lc.ctx, time.Duration(m.sip.RingSec)*time.Second)
 	defer ringCancel()
 	r.launch(ringCtx, lc, offer)
@@ -466,6 +497,7 @@ func (m *callManager) runIncoming(lc *lineCall, call imsCall, from string) {
 		return
 	}
 	m.logger.Info("incoming: connected", "from", masked, "phone", win.user, "srtp", leg.secure())
+	m.show(lc, &liveCall{Dir: "in", Phase: "talking", Phone: win.user, Peer: shownNumber(from)})
 	stopWatch = m.watchPhone(lc, leg, dlg, phoneTarget(dlg.InviteResponse))
 	defer stopWatch()
 	m.bridgeAndWait(lc, call, leg, dlg.Context().Done(), byePhone)
@@ -521,6 +553,7 @@ func (m *callManager) outgoingCall(req *sip.Request, tx sip.ServerTransaction, u
 		return
 	}
 	m.logger.Info("outgoing: dialling", "user", user, "to", maskNumber(num), "codec", plan.format.Name, "srtp", leg.secure())
+	m.show(lc, &liveCall{Dir: "out", Phase: "ringing", Phone: user, Peer: num})
 
 	dialCtx, dialCancel := context.WithCancel(lc.ctx)
 	defer dialCancel()
@@ -555,6 +588,7 @@ func (m *callManager) outgoingCall(req *sip.Request, tx sip.ServerTransaction, u
 				return
 			}
 			m.logger.Info("outgoing: connected", "to", maskNumber(num))
+			m.show(lc, &liveCall{Dir: "out", Phase: "talking", Phone: user, Peer: num})
 			stopWatch := m.watchPhone(lc, leg, dlg, phoneTarget(req))
 			defer stopWatch()
 			m.bridgeAndWait(lc, r.call, leg, dlg.Context().Done(), func() {
@@ -712,6 +746,7 @@ func (m *callManager) internalCall(req *sip.Request, tx sip.ServerTransaction, u
 	}
 
 	m.logger.Info("internal call: ringing", "from", user, "to", peer, "devices", len(r.live), "pushed", len(r.sleeping))
+	m.show(lc, &liveCall{Dir: "internal", Phase: "ringing", Phone: user, Peer: peer})
 	ringCtx, ringCancel := context.WithTimeout(lc.ctx, time.Duration(m.sip.RingSec)*time.Second)
 	defer ringCancel()
 	r.launch(ringCtx, lc, offerB)
@@ -776,6 +811,7 @@ func (m *callManager) internalCall(req *sip.Request, tx sip.ServerTransaction, u
 	}
 	m.logger.Info("internal call: connected", "from", user, "to", win.user, "codecs", f.Name+" <-> "+fB.Name,
 		"srtp", fmt.Sprintf("%t <-> %t", legA.secure(), legB.secure()))
+	m.show(lc, &liveCall{Dir: "internal", Phase: "talking", Phone: user, Peer: win.user})
 	stopA = m.watchPhone(lc, legA, dlg, phoneTarget(req))
 	stopB = m.watchPhone(lc, legB, dlgB, phoneTarget(dlgB.InviteResponse))
 	defer stopA()

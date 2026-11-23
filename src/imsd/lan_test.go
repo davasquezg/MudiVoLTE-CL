@@ -423,10 +423,7 @@ type testRig struct {
 
 func newTestRig(t *testing.T, cfg *Config, withDialer bool) *testRig {
 	t.Helper()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	if testing.Verbose() {
-		logger = slog.New(slog.NewTextHandler(testLogWriter{t}, nil))
-	}
+	logger := newTestLogger(t)
 	sc := SIPConfig{
 		Listen: "127.0.0.1:0", Transports: []string{"udp"},
 		Accounts:  []SIPAccount{{User: "pixel", Password: testPass, Ext: "201"}, {User: "iphone", Password: testPass, Ext: "202"}},
@@ -442,10 +439,46 @@ func newTestRig(t *testing.T, cfg *Config, withDialer bool) *testRig {
 	return &testRig{t: t, mgr: mgr, lan: lan, srvAddr: fmt.Sprintf("127.0.0.1:%d", lan.port)}
 }
 
-type testLogWriter struct{ t *testing.T }
+// newTestLogger is the logger of a test: silent, with -v into t.Log. Make it
+// before whatever logs through it registers a cleanup (see testLogWriter).
+func newTestLogger(t *testing.T) *slog.Logger {
+	if !testing.Verbose() {
+		return slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	return slog.New(slog.NewTextHandler(newTestLogWriter(t), nil))
+}
 
-func (w testLogWriter) Write(p []byte) (int, error) {
-	w.t.Log(strings.TrimSpace(string(p)))
+// testLogWriter takes the lines of a test's logger to t.Log while the test
+// lasts. The logger outlives the test: startLANSIP makes it sipgo's default
+// logger for the whole process, and goroutines of user agents closed in the
+// cleanups still log after them ("UDP ref went negative on try close" from
+// the reader of a closed socket). After the end of a test t.Log passes a line
+// to the parent test and panics once that has ended too, as each round of
+// -count does right after its last test. So the writer drops lines from its
+// own cleanup on. Registered before the cleanups of the rig and the phones,
+// that cleanup runs after them: their closing still reaches the log.
+type testLogWriter struct {
+	t    *testing.T
+	mu   sync.Mutex // held over t.Log: no line is on its way when the cleanup returns
+	done bool
+}
+
+func newTestLogWriter(t *testing.T) *testLogWriter {
+	w := &testLogWriter{t: t}
+	t.Cleanup(func() {
+		w.mu.Lock()
+		w.done = true
+		w.mu.Unlock()
+	})
+	return w
+}
+
+func (w *testLogWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.done {
+		w.t.Log(strings.TrimSpace(string(p)))
+	}
 	return len(p), nil
 }
 
@@ -623,8 +656,14 @@ func (p *testPhone) register(srvAddr, pass string) (*sip.Response, error) {
 }
 
 // call sends an INVITE to number and returns the dialog and the codes of the
-// provisional responses.
+// responses in the order the phone heard them.
 func (p *testPhone) call(srvAddr, number string) (*sipgo.DialogClientSession, []int, error) {
+	return p.callHearing(srvAddr, number, nil)
+}
+
+// callHearing is call that also passes the code of each response to heard
+// (unless nil) as soon as the phone hears it.
+func (p *testPhone) callHearing(srvAddr, number string, heard func(code int)) (*sipgo.DialogClientSession, []int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	dlg, err := p.dcc.Invite(ctx, p.uri(srvAddr, number), p.sdp(),
@@ -638,6 +677,9 @@ func (p *testPhone) call(srvAddr, number string) (*sipgo.DialogClientSession, []
 		mu.Lock()
 		codes = append(codes, r.StatusCode)
 		mu.Unlock()
+		if heard != nil {
+			heard(r.StatusCode)
+		}
 		return nil
 	}})
 	if err != nil {
@@ -1171,8 +1213,14 @@ func TestSIPInternalCall(t *testing.T) {
 		err   error
 	}
 	done := make(chan callRes, 1)
+	ringback := make(chan struct{})
 	go func() {
-		d, c, err := a.call(rig.srvAddr, "IPhone") // login is case-insensitive
+		var once sync.Once
+		d, c, err := a.callHearing(rig.srvAddr, "IPhone", func(code int) { // login is case-insensitive
+			if code == 180 {
+				once.Do(func() { close(ringback) })
+			}
+		})
 		done <- callRes{d, c, err}
 	}()
 	var in *sipgo.DialogServerSession
@@ -1183,6 +1231,17 @@ func TestSIPInternalCall(t *testing.T) {
 	}
 	if from := in.InviteRequest.From(); from == nil || from.Address.User != "pixel" {
 		t.Fatalf("caller on the second phone: %v", in.InviteRequest.From())
+	}
+	// The second phone picks up once the caller hears it ring, as a person
+	// does. An answer at once raced the ringback: sipgo hands each datagram
+	// to a goroutine of its own, a 200 read right behind the 180 can reach
+	// the INVITE transaction first, and the transaction then drops the 180.
+	select {
+	case <-ringback:
+	case r := <-done:
+		t.Fatalf("the call ended before a ringback: %v (codes %v)", r.err, r.codes)
+	case <-time.After(3 * time.Second):
+		t.Fatal("the caller heard no ringback (180) while the second phone rang")
 	}
 	if err := in.RespondSDP(b.sdp()); err != nil {
 		t.Fatal(err)

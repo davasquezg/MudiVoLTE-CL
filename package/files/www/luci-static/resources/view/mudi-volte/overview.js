@@ -26,6 +26,7 @@ var phases = {
 	registering: _('registering with the operator'),
 	recovering: _('recovering after a failure'),
 	'radio-restart': _('restarting the radio'),
+	'radio-off': _('the radio is off (airplane mode)'),
 	stopped: _('stopped')
 };
 

@@ -29,10 +29,7 @@ import (
 // temporary directory.
 func newTLSTestRig(t *testing.T, cfg *Config, withDialer bool) (*testRig, string) {
 	t.Helper()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	if testing.Verbose() {
-		logger = slog.New(slog.NewTextHandler(testLogWriter{t}, nil))
-	}
+	logger := newTestLogger(t)
 	dir := t.TempDir()
 	sc := SIPConfig{
 		Listen: "127.0.0.1:0", Transports: []string{"udp", "tls"},

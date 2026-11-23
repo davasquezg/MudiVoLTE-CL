@@ -148,6 +148,9 @@ func printStatus(w io.Writer, path string, now time.Time) int {
 		}
 		fmt.Fprintf(w, "Network: %s, IMS on %s (%s), P-CSCF %s\n", rat, s.Interface, s.Address, strings.Join(s.PCSCF, ", "))
 	}
+	if c := s.Call; c != nil && alive {
+		fmt.Fprintf(w, "Call:    %s\n", callText(c, ago(time.Unix(c.Start, 0))))
+	}
 	if len(s.Phones) > 0 {
 		names := make([]string, len(s.Phones))
 		for i, p := range s.Phones {
@@ -178,6 +181,32 @@ func printStatus(w io.Writer, path string, now time.Time) int {
 	return 1
 }
 
+// callText is the call of the line for mudi-volte status. The number of
+// the other side is masked, as in the log: the status gets pasted.
+func callText(c *liveCall, since string) string {
+	peer := maskNumber(c.Peer)
+	if c.Peer == "" {
+		peer = "a hidden number"
+	}
+	var who string
+	switch c.Dir {
+	case "in":
+		who = "incoming from " + peer
+		if c.Phone != "" {
+			who += ", answered by " + c.Phone
+		}
+	case "out":
+		who = "outgoing from " + c.Phone + " to " + peer
+	default:
+		who = "between the phones " + c.Phone + " and " + c.Peer
+	}
+	state := "talking"
+	if c.Phase == "ringing" {
+		state = "ringing"
+	}
+	return fmt.Sprintf("%s, %s for %s", who, state, since)
+}
+
 func phaseText(p string) string {
 	switch p {
 	case "starting":
@@ -192,6 +221,8 @@ func phaseText(p string) string {
 		return "recovering after a failure"
 	case "radio-restart":
 		return "restarting the radio"
+	case "radio-off":
+		return "the radio is off (airplane mode)"
 	}
 	return p
 }

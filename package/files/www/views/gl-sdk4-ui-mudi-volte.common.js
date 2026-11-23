@@ -62,6 +62,7 @@
 		registering: 'registering with the operator',
 		recovering: 'recovering after a failure',
 		'radio-restart': 'restarting the radio',
+		'radio-off': 'the radio is off (airplane mode)',
 		stopped: 'stopped'
 	};
 

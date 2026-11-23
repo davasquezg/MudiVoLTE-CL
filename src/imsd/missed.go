@@ -53,6 +53,9 @@ type missedLog struct {
 	now  func() time.Time
 	max  int64 // trim past this size
 	keep int   // calls left after trimming
+	// notify runs (in a goroutine of its own) for every recorded call but
+	// those of callers that are not allowed; nil tells nobody.
+	notify func()
 }
 
 // newMissedLog returns nil, which records nothing, for an empty path.
@@ -60,7 +63,20 @@ func newMissedLog(path string, log *slog.Logger) *missedLog {
 	if path == "" {
 		return nil
 	}
-	return &missedLog{path: path, log: log, now: time.Now, max: maxMissedBytes, keep: keepMissed}
+	return &missedLog{path: path, log: log, now: time.Now, max: maxMissedBytes, keep: keepMissed, notify: notifyScreen}
+}
+
+// screenNotice is the notice for MudiScreen. It shows before the passcode,
+// so it carries no number; "Open" leads to the list.
+const screenNotice = `{"id":"volte-missed","title":"Missed call","icon":"phone","color":"orange","app":"volte","page":"main","timeout":120}`
+
+// notifyScreen tells MudiScreen, an open user interface for the Mudi 7
+// touchscreen, that a call was missed: it lights the display with a notice.
+// It goes through the queue of the call's own notices (livecall.go), after
+// them. Without MudiScreen ubus answers that there is no such object, and
+// nothing else happens.
+func notifyScreen() {
+	mudiScreen.send("call", "mudi-screen", "notify", screenNotice)
 }
 
 // add records a missed call from the number the network gave. A failure only
@@ -75,8 +91,12 @@ func (l *missedLog) add(from, reason string) {
 	line, _ := json.Marshal(missedCall{Time: l.now().Format(time.RFC3339), From: from, Reason: reason})
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if err := l.append(append(line, '\n')); err != nil && l.log != nil {
-		l.log.Warn("missed call: not recorded", "file", l.path, "err", err)
+	if err := l.append(append(line, '\n')); err != nil {
+		if l.log != nil {
+			l.log.Warn("missed call: not recorded", "file", l.path, "err", err)
+		}
+	} else if l.notify != nil && reason != missedNotAllowed {
+		go l.notify()
 	}
 }
 

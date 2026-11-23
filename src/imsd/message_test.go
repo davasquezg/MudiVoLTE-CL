@@ -313,10 +313,7 @@ func writeSpoolSMS(t *testing.T, dir, name, from, sent, text string) {
 func TestSMSToPhones(t *testing.T) {
 	rig := newTestRig(t, &Config{}, false)
 	c := smsTestDirs(t)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	if testing.Verbose() {
-		logger = slog.New(slog.NewTextHandler(testLogWriter{t}, nil))
-	}
+	logger := newTestLogger(t)
 	inbox := filepath.Join(t.TempDir(), "inbox.jsonl")
 	writeSpoolSMS(t, c.Incoming, "GMS1.old", "447700900001", "26-11-01 10:00:00", "old one")
 
