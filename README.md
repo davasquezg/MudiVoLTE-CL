@@ -130,18 +130,6 @@ in the terminal: `mudi-volte phone show NAME`.
 `mudi-volte phone screen NAME` shows it on the router's own display for 90
 seconds.
 
-The line needs nothing on the router's display: with GL.iNet's own screen it
-works the same. When the router runs MudiScreen, an open user interface for
-its touchscreen, the line has a card of its own there with the phones and the
-missed calls, and a call shows while it is on: an incoming call lights the
-display with a notice until it is answered, and the card, the lock screen and
-the status bar show the call with its running time. A missed call lights the
-display with a notice too. The lock screen and the notices show no number,
-because they show before the passcode; the number shows behind it, on the
-card and the page of the line. The package keeps this app in
-`/usr/share/mudi-screen/apps/volte`; without MudiScreen the files do nothing
-and the notices go nowhere.
-
 The code links to `http://192.168.8.1:8060/p/<token>`, where the router hands the
 phone its account. Besides the account, the code switches on G.722 in Linphone
 (Linphone ships with it off, so calls would be narrowband) and, on Android, the
@@ -202,6 +190,29 @@ that checks the chat without the mobile network.
   on the MudiVoLTE web page and with `mudi-volte sms`.
 - To keep SMS off the phones, turn off "SMS on the phones" on the web page, or
   `uci set mudi-volte.main.sms=0 && uci commit mudi-volte && mudi-volte restart`.
+
+## On the router's screen
+
+The line needs nothing on the router's display: with GL.iNet's own screen it
+works the same. When the router runs
+[MudiScreen](https://github.com/xarvel/MudiScreen), an open user interface for
+its touchscreen, the line has a card of its own there with the phones and the
+missed calls, and a call shows while it is on: an incoming call lights the
+display with a notice until it is answered, and the card, the lock screen and
+the status bar show the call with its running time. A missed call lights the
+display with a notice too. The lock screen and the notices show no number,
+because they show before the passcode; the number shows behind it, on the
+card and the page of the line. The package keeps this app in
+`/usr/share/mudi-screen/apps/volte`; without MudiScreen the files do nothing
+and the notices go nowhere.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/call-incoming.png" width="240" alt="A notice for an incoming call on MudiScreen"><br><sub>An incoming call lights the display</sub></td>
+    <td align="center"><img src="docs/screenshots/call-home.png" width="240" alt="The call on the home screen of MudiScreen"><br><sub>The call and its running time</sub></td>
+    <td align="center"><img src="docs/screenshots/call-page.png" width="240" alt="The page of the line during a call"><br><sub>The page of the line, behind the passcode</sub></td>
+  </tr>
+</table>
 
 ## Everyday commands
 
