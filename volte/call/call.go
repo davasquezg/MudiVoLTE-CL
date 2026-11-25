@@ -83,6 +83,7 @@ type Call struct {
 	out       *sipnet.Request
 	inviteSeq uint32   // CSeq of our INVITE; a retry after 422 takes the next one
 	routes0   []string // route set of the initial INVITE
+	target0   string   // Request-URI of the initial INVITE
 	cancelled bool     // CANCEL sent
 	answered  bool     // the 2xx to our INVITE is taken: hanging up is a BYE from here on
 
