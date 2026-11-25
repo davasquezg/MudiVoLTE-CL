@@ -1148,7 +1148,7 @@ One bad message costs at most its connection, never the daemon (`volte/sipnet`):
   Every packet has CMR=15 (no preference).
 - Codec: a cgo wrapper around `opencore-amrwb` (decoding) and `vo-amrwbenc` (encoding),
   statically linked. Static build: `volte/media/amrwb`, tag `amrwb_static`.
-  Without AMR-WB — AMR and G.711 remain (an offer with G.711 only is rejected by some of the operator's gateways).
+  Without cgo (no AMR-WB, no AMR) — G.711 only (an offer with G.711 only is rejected by some of the operator's gateways).
 
 #### AMR, narrowband (RFC 4867)
 
@@ -1159,7 +1159,11 @@ One bad message costs at most its connection, never the daemon (`volte/sipnet`):
 - Preference: AMR-WB, then AMR, then G.711 (`network_codecs` in the log; the top-level `codecs` key of the
   daemon's JSON config overrides it, the UCI config does not set it). AMR is what an interconnect
   to 2G/3G or another network may offer without G.711 (issue #8); GSMA IR.92 makes it mandatory for a
-  VoLTE UE.
+  VoLTE UE. This order is the one of our offers. In an answer the offerer's order wins (RFC 3264
+  §6.1): an offer that lists AMR before G.711 is answered with AMR. That includes calls like the
+  ones of §86 (AMR-NB + PCMU) if AMR came first there (the order is not recorded here): they were
+  answered with PCMU, verified live, and now get AMR, not yet verified. To go back to G.711 for
+  them: top-level `"codecs": ["AMR-WB", "PCMA", "PCMU"]` (test: `TestNegotiateAMRBeforeG711`).
 - Bandwidth-efficient by default, octet-aligned if `fmtp` says so; the layout is the one of
   AMR-WB, with the AMR frame sizes of RFC 4867 Table 1: modes 0–7 (4.75–12.2 kbit/s) carry 95, 103,
   118, 134, 148, 159, 204 and 244 bits, SID (FT 8) 39 bits; FT 9–14 make the packet invalid (it is

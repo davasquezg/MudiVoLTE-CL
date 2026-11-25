@@ -483,9 +483,12 @@ switches off its own IMS client and hands the SIM and the operator's IMS
 connection to the host. `mudi-imsd`, the daemon in this package, is that client.
 It authenticates with the SIM (IMS AKA), registers with the operator over IPsec,
 answers and places calls (SIP, AMR-WB, AMR and G.711) and bridges them to the
-phones on the router's Wi-Fi (SIP, G.722 and G.711). AMR (narrowband) is for
-peers that offer it without AMR-WB or G.711, such as interconnects to other
-networks; it has not been tried on a live call yet.
+phones on the router's Wi-Fi (SIP, G.722 and G.711). AMR (narrowband) is used
+when the caller offers it before G.711 and without AMR-WB, for example an
+interconnect to another network; calls that offer AMR before PCMU, and that were
+answered with PCMU so far, now get AMR. AMR has not been tried on a live call
+yet (to verify on the router); to go back to G.711 only, set the top-level
+`"codecs": ["AMR-WB", "PCMA", "PCMU"]` in the daemon's JSON config.
 
 ```
  Linphone ──── Wi-Fi: SIP, RTP ────> mudi-imsd ──── IMS: SIP over IPsec, RTP ────> operator

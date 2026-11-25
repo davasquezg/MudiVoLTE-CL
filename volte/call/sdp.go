@@ -160,7 +160,9 @@ type Negotiated struct {
 
 // DefaultCodecs is our preference: wideband first, then AMR (narrowband,
 // mandatory for a VoLTE UE per GSMA IR.92 and what interconnects to 2G/3G
-// and other networks often offer without G.711), G.711 as a fallback.
+// and other networks often offer without G.711), G.711 as a fallback. This
+// order is the one of our offers; in an answer the offerer's order wins (see
+// Negotiate), so an offer listing AMR before G.711 is answered with AMR.
 var DefaultCodecs = []string{"AMR-WB", "AMR", "PCMA", "PCMU"}
 
 // Negotiate picks the codec for an answer: the first offered format we

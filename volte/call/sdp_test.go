@@ -149,3 +149,34 @@ func TestNegotiateAMROnly(t *testing.T) {
 		t.Fatalf("live offer without AMR-WB: %+v %+v %v", n.Codec, n.DTMF, err)
 	}
 }
+
+// The offerer's order decides between AMR and G.711 (RFC 3264 §6.1). An offer
+// like the one of §86 (AMR-NB before PCMU), which used to be answered with
+// PCMU, is now answered with AMR; with "codecs" set to AMR-WB and G.711 only
+// it goes back to PCMU. An offer that lists PCMU first keeps PCMU.
+func TestNegotiateAMRBeforeG711(t *testing.T) {
+	offer := func(order string) Audio {
+		a, err := ParseSDP([]byte("v=0\r\nc=IN IP4 192.0.2.1\r\nm=audio 5004 RTP/AVP " + order + "\r\n" +
+			"a=rtpmap:102 AMR/8000\r\na=fmtp:102 mode-set=0,2,4,7\r\n" +
+			"a=rtpmap:0 PCMU/8000\r\na=rtpmap:101 telephone-event/8000\r\na=ptime:20\r\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	for _, tc := range []struct {
+		order     string
+		supported []string
+		name      string
+		pt        int
+	}{
+		{"102 0 101", DefaultCodecs, "AMR", 102},
+		{"102 0 101", []string{"AMR-WB", "PCMA", "PCMU"}, "PCMU", 0},
+		{"0 102 101", DefaultCodecs, "PCMU", 0},
+	} {
+		n, err := Negotiate(offer(tc.order), tc.supported)
+		if err != nil || n.Codec.Name != tc.name || n.Codec.PT != tc.pt || n.DTMF == nil || n.DTMF.PT != 101 {
+			t.Errorf("offer %q, supported %v: %+v dtmf %+v %v", tc.order, tc.supported, n.Codec, n.DTMF, err)
+		}
+	}
+}

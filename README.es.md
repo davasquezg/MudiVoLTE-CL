@@ -534,9 +534,13 @@ desactiva su propio cliente IMS y le entrega la SIM y la conexión IMS del
 operador al host. `mudi-imsd`, el daemon de este paquete, es ese cliente. Se
 autentica con la SIM (IMS AKA), se registra con el operador sobre IPsec,
 contesta y hace llamadas (SIP, AMR-WB, AMR y G.711) y las conecta con los teléfonos
-en el Wi-Fi del router (SIP, G.722 y G.711). AMR (banda angosta) es para los
-extremos que lo ofrecen sin AMR-WB ni G.711, como las interconexiones con otras
-redes; todavía no se ha probado en una llamada real.
+en el Wi-Fi del router (SIP, G.722 y G.711). AMR (banda angosta) se usa cuando
+quien llama lo ofrece antes que G.711 y sin AMR-WB, por ejemplo una
+interconexión con otra red; las llamadas que ofrecen AMR antes que PCMU, y que
+hasta ahora se contestaban con PCMU, ahora quedan en AMR. AMR todavía no se ha
+probado en una llamada real (queda por verificar en el router); para volver a
+solo G.711, define en la configuración JSON del daemon la clave de nivel superior
+`"codecs": ["AMR-WB", "PCMA", "PCMU"]`.
 
 ```
  Linphone ──── Wi-Fi: SIP, RTP ────> mudi-imsd ──── IMS: SIP over IPsec, RTP ────> operator

@@ -1148,7 +1148,7 @@ Un mensaje inválido cuesta a lo sumo su conexión, nunca el daemon (`volte/sipn
   Cada paquete tiene CMR=15 (sin preferencia).
 - Códec: un wrapper cgo en torno a `opencore-amrwb` (decodificación) y `vo-amrwbenc` (codificación),
   enlazado estáticamente. Compilación estática: `volte/media/amrwb`, tag `amrwb_static`.
-  Sin AMR-WB quedan AMR y G.711 (una oferta solo con G.711 es rechazada por algunos gateways del operador).
+  Sin cgo (sin AMR-WB ni AMR), solo G.711 (una oferta solo con G.711 es rechazada por algunos gateways del operador).
 
 #### AMR, banda angosta (RFC 4867)
 
@@ -1159,7 +1159,12 @@ Un mensaje inválido cuesta a lo sumo su conexión, nunca el daemon (`volte/sipn
 - Preferencia: AMR-WB, luego AMR, luego G.711 (`network_codecs` en el log; la clave `codecs` de nivel superior de
   la configuración JSON del daemon la reemplaza, la configuración UCI no la fija). AMR es lo que una interconexión a
   2G/3G o a otra red puede ofrecer sin G.711 (issue #8); GSMA IR.92 lo hace obligatorio para un UE
-  VoLTE.
+  VoLTE. Este orden es el de nuestras ofertas. En una respuesta manda el orden del ofertante
+  (RFC 3264 §6.1): una oferta que lista AMR antes que G.711 se contesta con AMR. Eso incluye llamadas
+  como las de §86 (AMR-NB + PCMU) si allí AMR iba primero (el orden no está registrado aquí): se
+  contestaban con PCMU, verificado en vivo, y ahora quedan en AMR, aún sin verificar. Para volver a
+  G.711 en ellas: `"codecs": ["AMR-WB", "PCMA", "PCMU"]` de nivel superior (test:
+  `TestNegotiateAMRBeforeG711`).
 - Bandwidth-efficient por defecto, octet-aligned si `fmtp` lo indica; el formato es el de AMR-WB,
   con los tamaños de trama AMR de la Tabla 1 de RFC 4867: los modos 0–7 (4,75–12,2 kbit/s) llevan 95,
   103, 118, 134, 148, 159, 204 y 244 bits, el SID (FT 8) 39 bits; los FT 9–14 invalidan el paquete
