@@ -458,6 +458,11 @@ relay, with more delay.
   up: turn SA off in the modem with `AT+QNWPREFCFG="nr5g_disable_mode",1` (the
   AT Command tool in the GL admin panel, SIM 1). We have no such network to
   test this on.
+- IMS over IPv4 only. If the operator's IMS connection is IPv6 only, or it
+  gives only IPv6 P-CSCF addresses, the line does not register, and
+  `mudi-volte status` says so under "Last error" ("IMS over IPv6 is not
+  supported"). Which Chilean operators use IPv6 for IMS is not known yet. See
+  [docs/PROTOCOLS.md](docs/PROTOCOLS.md#ipv6) §2.3.
 - On iPhone, incoming calls in the background need the push account (see
   [Phones in the background](#phones-in-the-background)). SMS to an iPhone still
   arrive only while Linphone is open. An iPhone set up on UDP cannot be woken

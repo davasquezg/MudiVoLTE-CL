@@ -437,6 +437,58 @@ después de una reconexión (por ejemplo, `rmnet_data1` ← internet después de
 Código: `findIMSIface` en `src/imsd/pdn.go` — busca la interfaz con la IP de CGCONTRDP, no
 un nombre fijo.
 
+#### IPv6
+
+MudiVoLTE se registra **solo por IPv4**. Un operador cuyo APN IMS sea solo IPv6, o que anuncie los
+P-CSCF solo en IPv6, no logra el registro: el daemon lo dice de forma explícita (más abajo).
+Nada de esto se ha probado en una red: la configuración IMS de los operadores chilenos (Entel,
+Movistar, Claro, WOM) sigue **por verificar con cada operador**. La tabla del final sale de leer
+el código, no de mediciones.
+
+**Qué hace hoy el daemon con IPv6:**
+
+- La llamada de datos se pide primero como IPv4v6 y después como IPv4 (`startDataCall` en
+  `src/imsd/datacall.go`).
+- En un PDN dual stack, TS 27.007 §10.1.23 entrega una línea de CGCONTRDP con los parámetros IPv4 y
+  luego una con los IPv6 (más pares cuando hay más servidores DNS o P-CSCF). `parseCGCONTRDP` lee
+  ambas familias y las guarda por separado: IPv4 en `Local`/`PCSCF`, IPv6 en `Local6`/`PCSCF6`.
+  `cgcontrdpAddr` acepta las formas IPv4 (`a.b.c.d`, con `/len` o con la máscara en forma punteada)
+  y las formas IPv6 de `+CGPIAF`: notación con puntos (16 octetos decimales, 32 con la máscara) y
+  notación con dos puntos (`2001:db8::5`, con `/len` o una máscara tras un espacio). Todavía no se
+  ha visto qué forma imprime el RG650V para IPv6 (**por verificar en el router**).
+- `discoverPDN` (`src/imsd/main.go`) usa la dirección IPv4 y los P-CSCF IPv4. Los P-CSCF IPv6, sea de
+  CGCONTRDP o del ajuste `pcscf`, se dejan fuera con una línea en el log
+  (`IMS-PDN: IPv6 P-CSCFs left out, the IMS address is IPv4`).
+
+**Diagnóstico.** Los tres casos de abajo terminan la sesión como `pdn-failed`, igual que cualquier
+falla del PDN antes (la recuperación no cambia). El error envuelve `errIPv6Only` (`src/imsd/pdn.go`)
+y aparece en `last_error` del archivo de estado, que `mudi-volte status` muestra como "Last error",
+y una vez por sesión en el log, con nivel ERROR, como `IMS-PDN: IPv6 only, the line cannot register`
+(`waitPDN` en `src/imsd/service.go`, tras sus 10 intentos).
+
+| Caso | `last_error` (después de `pdn-failed: `) |
+|---|---|
+| CGCONTRDP entrega una dirección IPv6 y ninguna IPv4 (y la configuración no fija `interface` ni `local_ipv4`) | `the IMS PDN (APN "ims") has only the IPv6 address 2001:db8::5 in CGCONTRDP: IMS over IPv6 is not supported: MudiVoLTE registers over IPv4 only` |
+| Hay dirección IPv4, pero los P-CSCF son solo IPv6 (de CGCONTRDP o de `pcscf`) | `the P-CSCFs from CGCONTRDP are IPv6 only (2001:db8:1::20): IMS over IPv6 is not supported: …` |
+| CGCONTRDP no da dirección; una `rmnet_data*` sin la ruta por defecto tiene una dirección IPv6 global y ninguna IPv4 | `IMS PDN interface: no rmnet_data* IMS interface with an IPv4 address: rmnet_data0 has only IPv6 (2001:db8::5), no IPv4 address: IMS over IPv6 is not supported: …` |
+
+Las direcciones IPv6 link-local (`fe80::/10`) por sí solas no cuentan como PDN IPv6.
+
+**Qué haría falta para IPv6 completo** (funciones exactas; nada de esto está implementado):
+
+| Capa | Hoy | Falta para IPv6 |
+|---|---|---|
+| Dirección e interfaz IMS | `findIMSIface` y `firstIPv4` (`src/imsd/pdn.go`) buscan solo IPv4; `service.watch` revisa la dirección con `firstIPv4` | Buscar la dirección IPv6 global. En 3GPP la red entrega al UE un identificador de interfaz y el prefijo /64 por router advertisement, así que lo que CGCONTRDP muestra como dirección puede ser solo una parte (**por verificar en el router**) |
+| Configuración | `local_ipv4` es solo IPv4 (`discoverPDN`) | Un equivalente IPv6 |
+| Rutas de host a los P-CSCF | `addHostRoutes` (`src/imsd/service.go`) escribe `ip route replace A/32` | `/128` para IPv6 |
+| Configuración del registro | `regConfig` y `buildStack` (`src/imsd/main.go`) arman las direcciones con `netip.AddrFromSlice(ip.To4())`, que descarta IPv6 | Aceptar ambas familias |
+| Socket RTP | `netStack.bindRTP` (`src/imsd/netstack.go`) escucha en `udp4` | `udp6` o `udp` |
+| IPsec (XFRM) | `volte/ipsec` es neutral respecto de la familia: `Set.Validate` exige la misma familia en ambos extremos; el runner netlink (`netlink_linux.go`) arma SA y políticas con `netip.Addr.AsSlice()`, `hostNet` da `/128` para IPv6 y las listas usan `FAMILY_ALL` | Nada en el código; las SA IPv6 nunca han corrido en el kernel del Mudi (**por verificar**) |
+| Via, Contact y Route de SIP | `volte/reg` los escribe con `netip.AddrPort.String()`, que da `[2001:db8::1]:5060`, la forma de RFC 3261; `volte/sipnet` marca por `tcp`, neutral respecto de la familia | `granted` (`volte/reg/reg.go`) busca nuestro Contact en el 200 OK como texto: una red que escriba la dirección IPv6 de otra forma (ceros, mayúsculas) no coincidiría (**por verificar con el operador**) |
+| SDP | `SessionDescription.Bytes` (`volte/call/sdp.go`) escribe `IN IP6` para una dirección IPv6; el parser acepta ambas | `bandwidthAS` cuenta la cabecera IPv4 en `b=AS`; la de IPv6 es 20 bytes más larga |
+| Firewall | Las reglas están en la tabla `inet fw4` (§3.2), así que cubren ambas familias | Nada |
+| Puente SIP (LAN) | Solo IPv4 (§4.5); no depende de la familia del lado IMS | Nada para IMS |
+
 ### 2.4 AT+QIMSCFG="authenticate"
 
 El comando que ejecuta AKA en la SIM (§72):
