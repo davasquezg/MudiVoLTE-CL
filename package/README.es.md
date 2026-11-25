@@ -70,7 +70,7 @@ Los textos están en inglés. Un paquete de traducción, `mudi-volte-i18n-<idiom
 | Dónde | Idioma que sigue |
 |---|---|
 | Línea de comandos y configuración | `mudi-volte.main.lang` |
-| Página en el panel de administración de GL y sus mensajes de error | `mudi-volte.main.lang`; si no está definido, el idioma del panel y, si no, el del navegador |
+| Página en el panel de administración de GL y sus mensajes de error | `mudi-volte.main.lang`; si no está definido, el idioma del panel y, si no, el del navegador (con región, como `es-CL`, usa el catálogo `es_cl` y, si no existe, `es`) |
 | Página en LuCI | El idioma de LuCI (System > System > Language) |
 | App en la pantalla del router (MudiScreen) | El idioma de la pantalla (Settings > Language) |
 
