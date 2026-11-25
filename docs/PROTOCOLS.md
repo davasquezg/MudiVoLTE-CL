@@ -169,8 +169,9 @@ with `MUDI_VOLTE_UNINSTALL=1`: it has restored the modem already and removes the
 itself.
 
 `mudi-volte setup` works the same way in the other direction. It reads each value before it
-writes it (`ims`, `voice_disable`, `ue_usage_setting`, `voice_domain`, and `mode_pref` with
-`--lte-only`) and goes on only when the modem has taken all of them: without `voice_domain` 1
+writes it (`ims`, `voice_disable`, `ue_usage_setting`, `voice_domain`, `mode_pref` with
+`--lte-only`, and last `nr5g_disable_mode` 1 with `--no-sa`, which turns 5G SA off: `mode_pref`
+LTE:NR5G does not) and goes on only when the modem has taken all of them: without `voice_domain` 1
 the network may move a call to 3G, where a modem in External VoLTE mode has no voice. When the
 modem refuses a value or does not answer, setup writes the values it read back, newest first,
 and fails. It turns the router's sleep mode off (3.3), enables the service and restarts the
@@ -178,6 +179,11 @@ router only after the modem has taken every value, so a cancelled or failed setu
 modem, the service and the sleep settings as they were. What stays is the phone account and
 the country code, which setup creates before it asks, and `modem.orig` when the modem did not
 take the old values back either: `mudi-volte modem builtin` restores from it.
+`nr5g_disable_mode` goes to `modem.orig` only with `--no-sa` (a failed setup takes that line
+out again), and the restore writes it back only when the file has it, after the other values.
+The setup reads the value from the reply `+QNWPREFCFG: "nr5g_disable_mode",N`, as for the
+other values; that format is still to verify on the router, and a reply without a digit stops
+the setup as a modem that does not answer.
 
 The web pages run setup and the restore in the background (`--detach`): a request must wait
 neither for a modem that does not answer (with its retries one AT query takes minutes then)

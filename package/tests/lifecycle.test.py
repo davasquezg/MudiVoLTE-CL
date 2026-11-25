@@ -66,6 +66,8 @@ voice_disable() { echo "${VD:-2}"; }
 mode_pref() { echo AUTO; }
 voice_domain() { echo "${VDOM:-3}"; }
 ue_usage() { echo "${UE:-0}"; }
+# SA=none: the modem gives no value for nr5g_disable_mode.
+nr5g_disable_mode() { [ "${SA:-0}" = none ] || echo "${SA:-0}"; }
 at() { echo 001010000000000; }
 at_set() {
  echo "$1" >>"$SB/at"
@@ -153,6 +155,31 @@ class Lifecycle(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("enabled=1", self.read("events"))
         self.assertIn("reboot", self.read("events"))
+
+    def test_restore_gives_5g_standalone_back(self):
+        # Saved by setup --no-sa: written back last, then committed.
+        for sa, writes in (("1", ['AT+QNWPREFCFG="nr5g_disable_mode",0']), ("0", [])):
+            with self.subTest(now=sa):
+                self.saved_sa()
+                (self.sb / "at").unlink(missing_ok=True)
+                r = self.run_case("modem_give_back", SA=sa, **EXTERNAL)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(self.read("at").splitlines(), WRITES + writes + ["AT+QEFSSYNC=0"])
+
+    def test_refused_5g_standalone_restore_sets_everything_back(self):
+        self.saved_sa()
+        r = self.run_case("modem_give_back", SA="1", FAIL_AT='nr5g_disable_mode",0', **EXTERNAL)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("could not restore nr5g_disable_mode 0", r.stderr)
+        self.assertEqual(self.read("at").splitlines(),
+                         WRITES + ['AT+QNWPREFCFG="nr5g_disable_mode",0',
+                                   'AT+QNWPREFCFG="ue_usage_setting",1', 'AT+QNWPREFCFG="voice_domain",1',
+                                   'AT+QCALLCFG="voice_disable",3', 'AT+QCFG="ims",2'])
+
+    def saved_sa(self):
+        self.saved()
+        with (self.sb / "data/modem.orig").open("a") as f:
+            f.write("nr5g_disable_mode=0\n")
 
     def test_external_without_backup_uses_factory_voice_defaults(self):
         r = self.run_case("save_orig", MODE="2", VDOM="1", UE="1")
@@ -666,6 +693,8 @@ SETUP = ['AT+QCFG="ims",2', 'AT+QCALLCFG="voice_disable",3',
 BEFORE = ['AT+QCFG="ims",1', 'AT+QCALLCFG="voice_disable",2',
           'AT+QNWPREFCFG="ue_usage_setting",0', 'AT+QNWPREFCFG="voice_domain",3']
 OWN_VOICE = {"MODE": "1", "VD": "2", "VDOM": "3", "UE": "0"}
+# setup --no-sa: 5G standalone off, after the values above.
+NO_SA = 'AT+QNWPREFCFG="nr5g_disable_mode",1'
 
 
 class FailedSetup(unittest.TestCase):
@@ -735,6 +764,42 @@ class FailedSetup(unittest.TestCase):
         self.assertLeftAlone(r)
         self.assertEqual(self.read("at").splitlines(),
                          SETUP + ['AT+QNWPREFCFG="mode_pref",LTE:NR5G'] + BEFORE[::-1])
+
+    def test_no_sa_turns_5g_standalone_off(self):
+        # Issue #7: --lte-only (mode_pref LTE:NR5G) leaves 5G SA on, where the
+        # line does not come up. --no-sa writes nr5g_disable_mode 1 last and
+        # keeps the value from before for the restore.
+        r = self.setup("--no-sa")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), SETUP + [NO_SA])
+        self.assertIn("nr5g_disable_mode=0\n", self.read("data/modem.orig"))
+
+    def test_setup_without_no_sa_keeps_5g_standalone(self):
+        r = self.setup()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("nr5g_disable_mode", self.read("at") + self.read("data/modem.orig"))
+
+    def test_refused_sa_off_fails_the_setup(self):
+        r = self.setup("--no-sa", FAIL_AT="nr5g_disable_mode")
+        self.assertLeftAlone(r)
+        self.assertIn("the modem refused " + NO_SA, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), SETUP + [NO_SA] + BEFORE[::-1])
+        self.assertFalse((self.sb / "data/modem.orig").exists())  # saved by this run
+
+    def test_refused_sa_off_takes_its_saved_value_out_again(self):
+        # modem.orig of an earlier setup without --no-sa stays as it was.
+        (self.sb / "data").mkdir()
+        saved = "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n"
+        (self.sb / "data/modem.orig").write_text(saved)
+        r = self.setup("--no-sa", FAIL_AT="nr5g_disable_mode")
+        self.assertLeftAlone(r)
+        self.assertEqual(self.read("data/modem.orig"), saved)
+
+    def test_unanswered_sa_read_fails_the_setup(self):
+        r = self.setup("--no-sa", SA="none")
+        self.assertLeftAlone(r)
+        self.assertIn("could not read nr5g_disable_mode", r.stderr)
+        self.assertEqual(self.read("at").splitlines(), SETUP + BEFORE[::-1])
 
     def test_refused_mode_switch_keeps_sleep_settings(self):
         # Review 14.11 (docs): "a failed setup leaves the router as it was",

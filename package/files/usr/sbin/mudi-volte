@@ -2,7 +2,7 @@
 # shellcheck disable=SC3043  # BusyBox ash on the router has local
 # mudi-volte: set up and manage VoLTE calling on the GL.iNet Mudi 7 (GL-E5800).
 #
-#   mudi-volte setup [-y] [--lte-only|--keep-3g] [--phone NAME] [--detach]
+#   mudi-volte setup [-y] [--lte-only|--keep-3g] [--no-sa] [--phone NAME] [--detach]
 #   mudi-volte status
 #   mudi-volte missed [clear]
 #   mudi-volte sms [--json]
@@ -238,6 +238,11 @@ voice_disable() { at 'AT+QCALLCFG="voice_disable"' | sed -n 's/.*"voice_disable"
 mode_pref() { at 'AT+QNWPREFCFG="mode_pref"' | sed -n 's/.*"mode_pref",\([A-Z0-9:]*\).*/\1/p' | head -n 1; }
 voice_domain() { at 'AT+QNWPREFCFG="voice_domain"' | sed -n 's/.*"voice_domain",\([0-9]\).*/\1/p' | head -n 1; }
 ue_usage() { at 'AT+QNWPREFCFG="ue_usage_setting"' | sed -n 's/.*"ue_usage_setting",\([0-9]\).*/\1/p' | head -n 1; }
+# 5G standalone off (1) or not, for setup --no-sa. The reply is taken to be
+# +QNWPREFCFG: "nr5g_disable_mode",N as for the other values (to verify on the
+# router); spaces around the comma are allowed, and a reply without a digit
+# reads as no answer, so that setup stops instead of writing blind.
+nr5g_disable_mode() { at 'AT+QNWPREFCFG="nr5g_disable_mode"' | sed -n 's/.*"nr5g_disable_mode" *, *\([0-9]\).*/\1/p' | head -n 1; }
 
 # Voice over IMS only (voice_domain 1), data centric (ue_usage_setting 1):
 # the modem tells the network it takes no 3G/2G (circuit switched) calls, so
@@ -290,6 +295,7 @@ setup_failed() {
 	if [ -z "$undo" ] || undo_writes; then
 		# Saved by this run: the next setup saves the values of its own time.
 		[ "$made_orig" = 1 ] && rm -f "$ORIG"
+		[ "${SA_SAVED:-0}" = 1 ] && [ -f "$ORIG" ] && sed -i '/^nr5g_disable_mode=/d' "$ORIG"
 		die "$(T "setup stopped: the modem did not take all the settings that calls need; the values written to it are set back, and the service and the router's sleep settings are unchanged")"
 	fi
 	die "$(T "setup stopped: the modem did not take all the settings that calls need, nor all the values from before back; the service and the router's sleep settings are unchanged. When the modem answers, run the setup again, or 'mudi-volte modem builtin' to give it its own VoLTE back")"
@@ -360,6 +366,18 @@ save_orig() {
 		v=$(ue_usage)
 		[ -n "$v" ] && echo "ue_usage=$v" >>"$ORIG"
 	fi
+}
+
+# save_orig_sa: with setup --no-sa, also remember nr5g_disable_mode, the first
+# time only. SA_SAVED=1 when this run appended it: a failed setup takes the
+# line out again.
+save_orig_sa() {
+	grep -q '^nr5g_disable_mode=' "$ORIG" 2>/dev/null && return 0
+	local v
+	v=$(nr5g_disable_mode)
+	[ -n "$v" ] || return 0 # no answer: set_value stops the setup
+	echo "nr5g_disable_mode=$v" >>"$ORIG"
+	SA_SAVED=1
 }
 
 orig() { sed -n "s/^$1=//p" "$ORIG" 2>/dev/null | head -n 1; }
@@ -791,7 +809,7 @@ cmd_phone() {
 # --- commands ---
 
 cmd_setup() {
-	local lte_only=0 phone=phone imsi mcc oper cc mode undo='' made_orig=0
+	local lte_only=0 no_sa=0 phone=phone imsi mcc oper cc mode undo='' made_orig=0
 	case " $* " in
 	*' --detach '*)
 		local a args=''
@@ -806,6 +824,7 @@ cmd_setup() {
 		-y | --yes) YES=1 ;;
 		--lte-only) lte_only=1 ;;
 		--keep-3g) lte_only=0 ;;
+		--no-sa) no_sa=1 ;;
 		--phone)
 			phone=${2:-}
 			shift
@@ -851,7 +870,8 @@ cmd_setup() {
 		say "$(T 'The modem is already in External VoLTE mode.')"
 		[ -s "$ORIG" ] || made_orig=1
 		save_orig
-		local cycle=0 mp
+		[ "$no_sa" = 0 ] || save_orig_sa
+		local cycle=0 mp sa
 		if ! voice_settings_ok; then
 			say "$(T 'Switching the modem to IMS-only voice (no 3G fallback for calls).')"
 			set_voice_settings || setup_failed
@@ -859,6 +879,10 @@ cmd_setup() {
 		fi
 		if [ "$lte_only" = 1 ] && mp=$(mode_pref) && [ "$mp" != LTE:NR5G ]; then
 			set_value mode_pref 'QNWPREFCFG="mode_pref"' LTE:NR5G "$mp" || setup_failed
+			cycle=1
+		fi
+		if [ "$no_sa" = 1 ] && sa=$(nr5g_disable_mode) && [ "$sa" != 1 ]; then
+			set_value nr5g_disable_mode 'QNWPREFCFG="nr5g_disable_mode"' 1 "$sa" || setup_failed
 			cycle=1
 		fi
 		# Only once the modem took every value, as below.
@@ -887,13 +911,15 @@ cmd_setup() {
 	ask "$(T 'Switch the modem and restart the router now?')" Y || die "$(T 'cancelled; nothing in the modem was changed')"
 	[ -s "$ORIG" ] || made_orig=1
 	save_orig
+	[ "$no_sa" = 0 ] || save_orig_sa
 	# Every value or none: without voice_domain 1 the network may move a call
 	# to 3G. The router's sleep settings and the service change only after the
 	# modem took them all, so that a failed setup leaves the router as it was.
 	set_value ims 'QCFG="ims"' 2 "$mode" &&
 		set_value voice_disable 'QCALLCFG="voice_disable"' 3 "$(voice_disable)" &&
 		set_voice_settings &&
-		{ [ "$lte_only" = 0 ] || set_value mode_pref 'QNWPREFCFG="mode_pref"' LTE:NR5G "$(mode_pref)"; } ||
+		{ [ "$lte_only" = 0 ] || set_value mode_pref 'QNWPREFCFG="mode_pref"' LTE:NR5G "$(mode_pref)"; } &&
+		{ [ "$no_sa" = 0 ] || set_value nr5g_disable_mode 'QNWPREFCFG="nr5g_disable_mode"' 1 "$(nr5g_disable_mode)"; } ||
 		setup_failed
 	power_saving_off
 	uci set mudi-volte.main.enabled=1
@@ -1030,6 +1056,7 @@ cmd_modem() {
 		say "$(T 'IMS mode:      %s (2 = External VoLTE stack, as mudi-volte needs)' "$(ims_mode)")"
 		say "voice_disable: $(voice_disable)"
 		say "mode_pref:     $(mode_pref)"
+		say "$(T 'nr5g_disable_mode: %s (1 = 5G standalone off, as setup --no-sa sets)' "$(nr5g_disable_mode)")"
 		say "$(T 'voice_domain:  %s (1 = IMS voice only, as mudi-volte sets)' "$(voice_domain)")"
 		say "$(T 'ue_usage:      %s (1 = data centric)' "$(ue_usage)")"
 		if [ -s "$ORIG" ]; then say "$(T 'Saved original: %s' "$(tr '\n' ' ' <"$ORIG")")"; fi
@@ -1069,7 +1096,7 @@ $undo"
 # by then are set back, so that the External VoLTE line keeps working after a
 # restart too. MODE_BEFORE keeps the modem's mode from before (2 = external).
 modem_give_back() {
-	local mode ims vd mp vdom ue cur='' undo=''
+	local mode ims vd mp vdom ue sa cur='' cur_sa='' undo=''
 	mode=$(ims_mode)
 	MODE_BEFORE=$mode
 	if [ -z "$mode" ]; then
@@ -1077,6 +1104,7 @@ modem_give_back() {
 		return 1
 	fi
 	ims=$(orig ims) vd=$(orig voice_disable) mp=$(orig mode_pref) vdom=$(orig voice_domain) ue=$(orig ue_usage)
+	sa=$(orig nr5g_disable_mode) # saved by setup --no-sa only
 	if [ ! -s "$ORIG" ]; then
 		[ "$mode" = 2 ] || return 0 # setup never switched it: nothing to give back
 		ims=0 vd=3 vdom=3 ue=0      # external without a backup: the same factory fallback as save_orig
@@ -1085,11 +1113,16 @@ modem_give_back() {
 		cur=$(mode_pref)
 		[ "$mp" = "$cur" ] && mp=''
 	fi
+	if [ -n "$sa" ]; then
+		cur_sa=$(nr5g_disable_mode)
+		[ "$sa" = "$cur_sa" ] && sa=''
+	fi
 	if give_back ims 'QCFG="ims"' "${ims:-0}" "$mode" &&
 		give_back voice_disable 'QCALLCFG="voice_disable"' "${vd:-3}" "$(voice_disable)" &&
 		{ [ -z "$mp" ] || give_back mode_pref 'QNWPREFCFG="mode_pref"' "$mp" "$cur"; } &&
 		{ [ -z "$vdom" ] || give_back voice_domain 'QNWPREFCFG="voice_domain"' "$vdom" "$(voice_domain)"; } &&
-		{ [ -z "$ue" ] || give_back ue_usage_setting 'QNWPREFCFG="ue_usage_setting"' "$ue" "$(ue_usage)"; }; then
+		{ [ -z "$ue" ] || give_back ue_usage_setting 'QNWPREFCFG="ue_usage_setting"' "$ue" "$(ue_usage)"; } &&
+		{ [ -z "$sa" ] || give_back nr5g_disable_mode 'QNWPREFCFG="nr5g_disable_mode"' "$sa" "$cur_sa"; }; then
 		# Committed at once: after a removal by opkg the router restarts by the
 		# user's hand, perhaps within seconds, and the modem's own VoLTE has to
 		# be there after it.

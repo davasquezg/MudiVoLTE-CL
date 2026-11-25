@@ -9,7 +9,7 @@ repository; this page is the complete reference.
 ## All commands
 
 ```
-mudi-volte setup [-y] [--lte-only|--keep-3g] [--phone NAME] [--detach]
+mudi-volte setup [-y] [--lte-only|--keep-3g] [--no-sa] [--phone NAME] [--detach]
 mudi-volte status
 mudi-volte missed [clear]
 mudi-volte sms [--json]
@@ -26,6 +26,7 @@ mudi-volte version
 |---|---|
 | `setup` | Checks the router, the modem and the SIM, creates a phone account, switches the modem to External VoLTE mode with voice over IMS only, turns off the router's sleep mode and restarts the router once. When the modem refuses a value, setup sets back what it wrote and fails: no restart, and the service and the sleep settings stay as they were. `-y` answers the question itself. Setup also prints the country calling code for numbers dialled with a leading 0: `mudi-volte.main.country` when it is set, otherwise the code of the SIM's MCC, which it writes there (the codes of Latin America and the Caribbean are still to verify against ITU-T E.212/E.164; set the right one with `uci` if it is wrong or missing) |
 | `setup --lte-only` | Also keeps the modem on 4G/5G. Rarely needed: it costs the internet where only 3G reaches. `--keep-3g` is the default |
+| `setup --no-sa` | Also turns 5G standalone off in the modem (`AT+QNWPREFCFG="nr5g_disable_mode",1`), for a network with 5G SA, where the line does not come up; 4G and 5G NSA stay. `--lte-only` does not do this. The value from before goes to `modem.orig` (only with `--no-sa`), and `modem builtin` and `uninstall` write it back. Not yet tested on a network with SA |
 | `status` | Is the SIM registered, which phones are connected, how many calls were missed |
 | `missed` | Incoming calls that no phone answered, newest first: time, number, reason |
 | `missed clear` | Empty the list of missed calls |
