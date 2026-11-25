@@ -1,3 +1,5 @@
+**English** | [Español](CHANGELOG.es.md)
+
 # Changelog
 
 Notable changes to MudiVoLTE. The version is in `package/VERSION`; the

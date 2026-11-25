@@ -1,3 +1,5 @@
+**English** | [Español](README.es.md)
+
 # MudiVoLTE: calls and SMS on the GL.iNet Mudi 7
 
 The GL.iNet Mudi 7 (GL-E5800) has a 5G modem, the Quectel RG650V, that officially
