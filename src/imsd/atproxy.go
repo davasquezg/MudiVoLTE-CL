@@ -43,7 +43,9 @@ func setIMSSlot(n int) error {
 func subSelect() string { return fmt.Sprintf("QUIMSUB=%d;+QUIMSUB?", imsSlot) }
 
 // subConfirmed: the reply of the selection query names the line's subscription.
-func subConfirmed(out string) bool { return strings.Contains(out, fmt.Sprintf("+QUIMSUB: %d", imsSlot)) }
+func subConfirmed(out string) bool {
+	return strings.Contains(out, fmt.Sprintf("+QUIMSUB: %d", imsSlot))
+}
 
 // atRunner sends one AT line to the modem and returns the raw AT output (the
 // ubus JSON is already parsed, line breaks are inside the text).
