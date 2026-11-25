@@ -253,5 +253,5 @@ correction does not move.
 | `po/` | Translations: `templates/mudi-volte.pot` (made from the sources), `<lang>/mudi-volte.po`, and `<lang>/mudi-screen-volte.tsv` for the screen app (MudiScreen's catalog format) |
 | `files/` | Everything installed on the router except the binary and the license files; `build.sh` gzips `www/views/` as the GL admin panel expects |
 | `tests/` | `run.sh`: the GL admin panel page with Vue 2 in node, and the LuCI page with LuCI's modules as stubs (needs node and npm) |
-| `toolchain/` | musl toolchain and AMR-WB libraries for the static build, the license collector, and `i18n.py` (extract, update, check and build the translations) |
+| `toolchain/` | musl toolchain and AMR-WB and AMR libraries for the static build, the license collector, and `i18n.py` (extract, update, check and build the translations) |
 | `THIRD_PARTY.md`, `licenses/` | Third-party components inside `mudi-imsd` and their license texts |

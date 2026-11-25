@@ -533,8 +533,10 @@ El RG650V tiene un modo que Quectel llama "External VoLTE Stack": el módem
 desactiva su propio cliente IMS y le entrega la SIM y la conexión IMS del
 operador al host. `mudi-imsd`, el daemon de este paquete, es ese cliente. Se
 autentica con la SIM (IMS AKA), se registra con el operador sobre IPsec,
-contesta y hace llamadas (SIP, AMR-WB y G.711) y las conecta con los teléfonos
-en el Wi-Fi del router (SIP, G.722 y G.711).
+contesta y hace llamadas (SIP, AMR-WB, AMR y G.711) y las conecta con los teléfonos
+en el Wi-Fi del router (SIP, G.722 y G.711). AMR (banda angosta) es para los
+extremos que lo ofrecen sin AMR-WB ni G.711, como las interconexiones con otras
+redes; todavía no se ha probado en una llamada real.
 
 ```
  Linphone ──── Wi-Fi: SIP, RTP ────> mudi-imsd ──── IMS: SIP over IPsec, RTP ────> operator
@@ -597,11 +599,11 @@ package/build.sh          # dist/: el .ipk, install.sh y SHA256SUMS
 ```
 
 `build-static.sh` compila `mudi-imsd` como un binario completamente estático con
-musl y con el códec AMR-WB incluido, y `mudi-dsi-helper` enlazado contra musl de
+musl y con los códecs AMR-WB y AMR incluidos, y `mudi-dsi-helper` enlazado contra musl de
 forma dinámica: tiene que cargar una biblioteca del firmware. Para instalar tu
 propia compilación, copia `dist/install.sh` y el `.ipk` al router como en "Sin
 internet en el router" más arriba. `scripts/build-imsd.sh` es una compilación
-más rápida sin el códec, para desarrollo: su lado de red ofrece solo G.711.
+más rápida sin los códecs, para desarrollo: su lado de red ofrece solo G.711.
 
 | Directorio | Contenido |
 |---|---|

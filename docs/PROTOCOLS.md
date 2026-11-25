@@ -22,7 +22,7 @@ the operator's side, `198.51.100.x` for ours.
 4. [Standard protocols — implementation](#4-standard-protocols--implementation)
    - 4.1 [IMS registration (sec-agree, IPsec, AKA)](#41-ims-registration-sec-agree-ipsec-aka)
    - 4.2 [Incoming and outgoing calls](#42-incoming-and-outgoing-calls)
-   - 4.3 [Media (RTP, AMR-WB, G.722, G.711, DTMF)](#43-media-rtp-amr-wb-g722-g711-dtmf)
+   - 4.3 [Media (RTP, AMR-WB, AMR, G.722, G.711, DTMF)](#43-media-rtp-amr-wb-amr-g722-g711-dtmf)
    - 4.4 [SMS over IP](#44-sms-over-ip)
    - 4.5 [SIP bridge for LAN phones (Mudi Wi-Fi)](#45-sip-bridge-for-lan-phones-mudi-wi-fi)
 5. [Known pitfalls](#5-known-pitfalls)
@@ -1042,7 +1042,7 @@ Codes in `src/imsd/callmgr.go`:
 
 #### Outgoing call (UAC)
 
-Path over the IMS PDN with an AMR-WB + G.711 + DTMF offer. Headers:
+Path over the IMS PDN with an AMR-WB + AMR + G.711 + DTMF offer (AMR only when linked in, see 4.3). Headers:
 - `Route: <sip:P-CSCF:port-s;lr>` + Service-Route from REGISTER.
 - `P-Preferred-Service: urn:urn-7:3gpp-service.ims.icsi.mmtel`
 - `P-Preferred-Identity: <first P-Associated-URI>` (§88 — the fix for 403).
@@ -1053,7 +1053,7 @@ PRACK for reliable 18x (§88). ACK for 2xx (§88). CANCEL on hang-up before the 
 
 On `488 Not Acceptable Here` from the gateway: the gateway requires AMR/AMR-WB (§88 — a G.711-only
 offer is rejected by the MSX with `sipsl_CompareCodecListForCommon failed`). This needs a cross-compiled
-binary with AMR-WB (cgo, opencore-amr + vo-amrwbenc).
+binary with AMR-WB and AMR (cgo, opencore-amr + vo-amrwbenc).
 
 #### re-INVITE and UPDATE
 
@@ -1128,7 +1128,7 @@ One bad message costs at most its connection, never the daemon (`volte/sipnet`):
   error in the log is still a bug to fix.
 
 
-### 4.3 Media (RTP, AMR-WB, G.722, G.711, DTMF)
+### 4.3 Media (RTP, AMR-WB, AMR, G.722, G.711, DTMF)
 
 #### RTP (RFC 3550)
 
@@ -1148,7 +1148,32 @@ One bad message costs at most its connection, never the daemon (`volte/sipnet`):
   Every packet has CMR=15 (no preference).
 - Codec: a cgo wrapper around `opencore-amrwb` (decoding) and `vo-amrwbenc` (encoding),
   statically linked. Static build: `volte/media/amrwb`, tag `amrwb_static`.
-  Without AMR-WB — G.711 only (an offer with G.711 only is rejected by some of the operator's gateways).
+  Without AMR-WB — AMR and G.711 remain (an offer with G.711 only is rejected by some of the operator's gateways).
+
+#### AMR, narrowband (RFC 4867)
+
+- `AMR/8000`, dynamic PT: the tested network offers it on several PTs with different `mode-set`s
+  (102, 100, 107, 108, 113 in `volte/call/testdata/live_offer.sdp`); we answer with the first one
+  it lists and return its `fmtp` unchanged. In our own offers: PT=102,
+  `mode-change-capability=2;max-red=0` (the `fmtp` of the network's own AMR line), no `mode-set`.
+- Preference: AMR-WB, then AMR, then G.711 (`network_codecs` in the log; the top-level `codecs` key of the
+  daemon's JSON config overrides it, the UCI config does not set it). AMR is what an interconnect
+  to 2G/3G or another network may offer without G.711 (issue #8); GSMA IR.92 makes it mandatory for a
+  VoLTE UE.
+- Bandwidth-efficient by default, octet-aligned if `fmtp` says so; the layout is the one of
+  AMR-WB, with the AMR frame sizes of RFC 4867 Table 1: modes 0–7 (4.75–12.2 kbit/s) carry 95, 103,
+  118, 134, 148, 159, 204 and 244 bits, SID (FT 8) 39 bits; FT 9–14 make the packet invalid (it is
+  dropped), and AMR has no SPEECH_LOST.
+- Encoding mode: the highest mode of the peer's `mode-set` (e.g. `mode-set=0,2,4,7` → mode 7);
+  without `mode-set` — mode 7 (12.2 kbit/s). CMR=15, DTX off, as for AMR-WB.
+- Codec: a cgo wrapper around `opencore-amrnb` (encoding and decoding, opencore-amr 0.1.6,
+  `Encoder_Interface_*`/`Decoder_Interface_*` on storage-format frames), `volte/media/amrnb`,
+  statically linked with the same tag `amrwb_static`. Without cgo — no AMR.
+- Bridge: the IMS leg resamples 8 kHz to 16 kHz and back (as for G.711, below), so the phones get
+  AMR in G.722 or G.711. DTMF: telephone-event/8000.
+- Not yet tried on a live call: to verify on the router with a call that negotiates AMR (for
+  example running the daemon by hand with `"codecs": ["AMR", "PCMA", "PCMU"]` in its config), and with the
+  operator for interconnects.
 
 #### G.722 (ITU-T G.722)
 
@@ -1163,12 +1188,12 @@ One bad message costs at most its connection, never the daemon (`volte/sipnet`):
 - Seen in calls with Georgian phone numbers (§86: AMR-NB + PCMU), and with a G.711-only
   offer.
 - Pure Go in `volte/media`.
-- Resampling 8↔16 kHz for the AMR-WB (16 kHz) ↔ PCMU (8 kHz) bridge: Hamming-window FIR filter,
+- Resampling 8↔16 kHz for the 16 kHz bridge and every 8 kHz network codec (PCMU, PCMA, AMR): Hamming-window FIR filter,
   33 taps, history kept between frames (`src/imsd/lan_codec.go`).
 
 #### DTMF (RFC 4733)
 
-- PT=116 (telephone-event/16000) for AMR-WB sessions.
+- PT=116 (telephone-event/16000) for AMR-WB sessions; telephone-event/8000 for AMR and G.711.
 - Receiving: one digit per event, on the first end packet.
 - Implementation in `volte/media`.
 
@@ -1459,7 +1484,7 @@ Standards actually used in the project (as mentioned in the code and the log):
 | RFC 3550 | RTP: A Transport Protocol for Real-Time Applications | RTP bridge, marker after a gap in the stream |
 | RFC 4028 | Session Timers in SIP | `volte/call/session.go`: both roles, refresh via UPDATE; 4.2, session timer |
 | RFC 4733 | RTP Payload for DTMF Digits and Telephony Tones | telephone-event, PT=116 |
-| RFC 4867 | RTP Payload Format and File Storage Format for AMR/AMR-WB | AMR-WB bandwidth-efficient; §88, §63 |
+| RFC 4867 | RTP Payload Format and File Storage Format for AMR/AMR-WB | AMR-WB and AMR, bandwidth-efficient and octet-aligned; §88, §63 |
 | RFC 5626 | Managing Client-Initiated Connections in SIP (+sip.instance) | Bindings with an instance UUID |
 | RFC 7254 | A Uniform Resource Name Namespace for the GSMA and the IMEI | `urn:gsma:imei:...` in Contact |
 | RFC 7616 / RFC 2617 | HTTP Digest Access Authentication | Authorization of LAN phones (MD5, `qop=auth`) |

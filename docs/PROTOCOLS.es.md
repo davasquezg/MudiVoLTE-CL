@@ -22,7 +22,7 @@ el lado del operador, `198.51.100.x` para el nuestro.
 4. [Protocolos estándar — implementación](#4-protocolos-estándar--implementación)
    - 4.1 [Registro IMS (sec-agree, IPsec, AKA)](#41-registro-ims-sec-agree-ipsec-aka)
    - 4.2 [Llamadas entrantes y salientes](#42-llamadas-entrantes-y-salientes)
-   - 4.3 [Medios (RTP, AMR-WB, G.722, G.711, DTMF)](#43-medios-rtp-amr-wb-g722-g711-dtmf)
+   - 4.3 [Medios (RTP, AMR-WB, AMR, G.722, G.711, DTMF)](#43-medios-rtp-amr-wb-amr-g722-g711-dtmf)
    - 4.4 [SMS sobre IP](#44-sms-sobre-ip)
    - 4.5 [Puente SIP para teléfonos de la LAN (Wi-Fi del Mudi)](#45-puente-sip-para-teléfonos-de-la-lan-wi-fi-del-mudi)
 5. [Problemas conocidos](#5-problemas-conocidos)
@@ -1042,7 +1042,7 @@ Códigos en `src/imsd/callmgr.go`:
 
 #### Llamada saliente (UAC)
 
-Ruta por el PDN IMS con una oferta AMR-WB + G.711 + DTMF. Encabezados:
+Ruta por el PDN IMS con una oferta AMR-WB + AMR + G.711 + DTMF (AMR solo si está enlazado, ver 4.3). Encabezados:
 - `Route: <sip:P-CSCF:port-s;lr>` + Service-Route del REGISTER.
 - `P-Preferred-Service: urn:urn-7:3gpp-service.ims.icsi.mmtel`
 - `P-Preferred-Identity: <first P-Associated-URI>` (§88: la corrección del 403).
@@ -1053,7 +1053,7 @@ PRACK para 18x confiables (§88). ACK para 2xx (§88). CANCEL al colgar antes de
 
 Ante `488 Not Acceptable Here` desde el gateway: el gateway exige AMR/AMR-WB (§88: una oferta solo con G.711
 es rechazada por el MSX con `sipsl_CompareCodecListForCommon failed`). Esto requiere un binario
-compilado en forma cruzada con AMR-WB (cgo, opencore-amr + vo-amrwbenc).
+compilado en forma cruzada con AMR-WB y AMR (cgo, opencore-amr + vo-amrwbenc).
 
 #### re-INVITE y UPDATE
 
@@ -1128,7 +1128,7 @@ Un mensaje inválido cuesta a lo sumo su conexión, nunca el daemon (`volte/sipn
   error en el log sigue siendo un bug que corregir.
 
 
-### 4.3 Medios (RTP, AMR-WB, G.722, G.711, DTMF)
+### 4.3 Medios (RTP, AMR-WB, AMR, G.722, G.711, DTMF)
 
 #### RTP (RFC 3550)
 
@@ -1148,7 +1148,32 @@ Un mensaje inválido cuesta a lo sumo su conexión, nunca el daemon (`volte/sipn
   Cada paquete tiene CMR=15 (sin preferencia).
 - Códec: un wrapper cgo en torno a `opencore-amrwb` (decodificación) y `vo-amrwbenc` (codificación),
   enlazado estáticamente. Compilación estática: `volte/media/amrwb`, tag `amrwb_static`.
-  Sin AMR-WB, solo G.711 (una oferta solo con G.711 es rechazada por algunos gateways del operador).
+  Sin AMR-WB quedan AMR y G.711 (una oferta solo con G.711 es rechazada por algunos gateways del operador).
+
+#### AMR, banda angosta (RFC 4867)
+
+- `AMR/8000`, PT dinámico: la red probada lo ofrece en varios PT con distintos `mode-set`
+  (102, 100, 107, 108, 113 en `volte/call/testdata/live_offer.sdp`); respondemos con el primero que
+  lista y devolvemos su `fmtp` sin cambios. En nuestras propias ofertas: PT=102,
+  `mode-change-capability=2;max-red=0` (el `fmtp` de la propia línea AMR de la red), sin `mode-set`.
+- Preferencia: AMR-WB, luego AMR, luego G.711 (`network_codecs` en el log; la clave `codecs` de nivel superior de
+  la configuración JSON del daemon la reemplaza, la configuración UCI no la fija). AMR es lo que una interconexión a
+  2G/3G o a otra red puede ofrecer sin G.711 (issue #8); GSMA IR.92 lo hace obligatorio para un UE
+  VoLTE.
+- Bandwidth-efficient por defecto, octet-aligned si `fmtp` lo indica; el formato es el de AMR-WB,
+  con los tamaños de trama AMR de la Tabla 1 de RFC 4867: los modos 0–7 (4,75–12,2 kbit/s) llevan 95,
+  103, 118, 134, 148, 159, 204 y 244 bits, el SID (FT 8) 39 bits; los FT 9–14 invalidan el paquete
+  (se descarta), y AMR no tiene SPEECH_LOST.
+- Modo de codificación: el modo más alto del `mode-set` del par (p. ej., `mode-set=0,2,4,7` → modo
+  7); sin `mode-set`, modo 7 (12,2 kbit/s). CMR=15 y DTX apagado, igual que en AMR-WB.
+- Códec: un wrapper cgo en torno a `opencore-amrnb` (codificación y decodificación, opencore-amr
+  0.1.6, `Encoder_Interface_*`/`Decoder_Interface_*` sobre tramas en formato de almacenamiento),
+  `volte/media/amrnb`, enlazado estáticamente con el mismo tag `amrwb_static`. Sin cgo, no hay AMR.
+- Puente: el tramo IMS remuestrea de 8 kHz a 16 kHz y de vuelta (igual que G.711, más abajo), así que
+  los teléfonos reciben AMR en G.722 o G.711. DTMF: telephone-event/8000.
+- Aún no probado en una llamada real: queda por verificar en el router con una llamada que negocie
+  AMR (por ejemplo, ejecutando el daemon a mano con
+  `"codecs": ["AMR", "PCMA", "PCMU"]` en su configuración), y con el operador para las interconexiones.
 
 #### G.722 (ITU-T G.722)
 
@@ -1163,12 +1188,12 @@ Un mensaje inválido cuesta a lo sumo su conexión, nunca el daemon (`volte/sipn
 - Visto en llamadas con números telefónicos georgianos (§86: AMR-NB + PCMU), y con una oferta
   solo con G.711.
 - Go puro en `volte/media`.
-- Remuestreo 8↔16 kHz para el puente AMR-WB (16 kHz) ↔ PCMU (8 kHz): filtro FIR con ventana de Hamming,
+- Remuestreo 8↔16 kHz entre el puente de 16 kHz y todo códec de red de 8 kHz (PCMU, PCMA, AMR): filtro FIR con ventana de Hamming,
   33 coeficientes, historial conservado entre tramas (`src/imsd/lan_codec.go`).
 
 #### DTMF (RFC 4733)
 
-- PT=116 (telephone-event/16000) para sesiones AMR-WB.
+- PT=116 (telephone-event/16000) para sesiones AMR-WB; telephone-event/8000 para AMR y G.711.
 - Recepción: un dígito por evento, en el primer paquete de fin.
 - Implementación en `volte/media`.
 
@@ -1459,7 +1484,7 @@ Normas efectivamente usadas en el proyecto (según se mencionan en el código y 
 | RFC 3550 | RTP: A Transport Protocol for Real-Time Applications | Puente RTP, marker tras un hueco en el flujo |
 | RFC 4028 | Session Timers in SIP | `volte/call/session.go`: ambos roles, refresco vía UPDATE; 4.2, temporizador de sesión |
 | RFC 4733 | RTP Payload for DTMF Digits and Telephony Tones | telephone-event, PT=116 |
-| RFC 4867 | RTP Payload Format and File Storage Format for AMR/AMR-WB | AMR-WB bandwidth-efficient; §88, §63 |
+| RFC 4867 | RTP Payload Format and File Storage Format for AMR/AMR-WB | AMR-WB y AMR, bandwidth-efficient y octet-aligned; §88, §63 |
 | RFC 5626 | Managing Client-Initiated Connections in SIP (+sip.instance) | Bindings con un UUID de instancia |
 | RFC 7254 | A Uniform Resource Name Namespace for the GSMA and the IMEI | `urn:gsma:imei:...` en el Contact |
 | RFC 7616 / RFC 2617 | HTTP Digest Access Authentication | Autorización de los teléfonos de la LAN (MD5, `qop=auth`) |
