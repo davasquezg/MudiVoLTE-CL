@@ -52,13 +52,22 @@ type netStack struct {
 	onEvent func(c *netCall, s CallState)
 }
 
-// availableCodecs returns what we can do on the network: AMR-WB only when the
-// codec is linked in (cgo build with media/amrwb), otherwise G.711.
+// availableCodecs returns what we can do on the network, best first: AMR-WB
+// and AMR only when their codec is linked in (cgo build with media/amrwb and
+// media/amrnb), then G.711.
 func availableCodecs() []string {
-	if media.NewAMRWBCoder != nil {
-		return []string{"AMR-WB", "PCMA", "PCMU"}
+	return linkedCodecs(media.NewAMRWBCoder != nil, media.NewAMRNBCoder != nil)
+}
+
+func linkedCodecs(amrwb, amrnb bool) []string {
+	var out []string
+	if amrwb {
+		out = append(out, "AMR-WB")
 	}
-	return []string{"PCMA", "PCMU"}
+	if amrnb {
+		out = append(out, "AMR")
+	}
+	return append(out, "PCMA", "PCMU")
 }
 
 func newNetStack(iface string, rc reg.Config, auth volsim.Authenticator, cc call.Config, sc sms.Config, log *slog.Logger) (*netStack, error) {

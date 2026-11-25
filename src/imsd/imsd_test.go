@@ -446,13 +446,18 @@ func TestParseQENGANI(t *testing.T) {
 }
 
 // TestIMSLegRoundtrip runs the network leg as in a live call: 16 kHz PCM →
-// network codec → RTP → back. G.711 works in any build; AMR-WB when the
-// codec is linked in (cgo).
+// network codec → RTP → back. G.711 works in any build; AMR-WB and AMR
+// (8 kHz, through the resampler like G.711) when the codec is linked in (cgo).
 func TestIMSLegRoundtrip(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	cases := []NetMedia{{Negotiated: true, Codec: "PCMA", PayloadType: 8, ClockRate: 8000}}
 	if media.NewAMRWBCoder != nil {
 		cases = append(cases, NetMedia{Negotiated: true, Codec: "AMR-WB", PayloadType: 101, ClockRate: 16000, ModeSet: "0,1,2"})
+	}
+	if media.NewAMRNBCoder != nil {
+		cases = append(cases,
+			NetMedia{Negotiated: true, Codec: "AMR", PayloadType: 108, ClockRate: 8000, ModeSet: "7"},
+			NetMedia{Negotiated: true, Codec: "AMR", PayloadType: 100, ClockRate: 8000, ModeSet: "0,2,4,7", OctetAlign: true})
 	}
 	for _, m := range cases {
 		call := newLoopCall(m)
@@ -489,6 +494,27 @@ func TestIMSLegRoundtrip(t *testing.T) {
 		if energy < 20*320*1e6 {
 			t.Errorf("%s: no audio came through (energy %.3g)", m.Codec, energy)
 		}
+	}
+}
+
+// The network codec list follows what is linked in: AMR-WB, then AMR, then
+// G.711, which is always there.
+func TestLinkedCodecs(t *testing.T) {
+	for _, tc := range []struct {
+		wb, nb bool
+		want   string
+	}{
+		{true, true, "AMR-WB,AMR,PCMA,PCMU"},
+		{true, false, "AMR-WB,PCMA,PCMU"},
+		{false, true, "AMR,PCMA,PCMU"},
+		{false, false, "PCMA,PCMU"},
+	} {
+		if got := strings.Join(linkedCodecs(tc.wb, tc.nb), ","); got != tc.want {
+			t.Errorf("AMR-WB %v, AMR %v: %s, want %s", tc.wb, tc.nb, got, tc.want)
+		}
+	}
+	if got, want := availableCodecs(), linkedCodecs(media.NewAMRWBCoder != nil, media.NewAMRNBCoder != nil); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("availableCodecs %v, want %v", got, want)
 	}
 }
 

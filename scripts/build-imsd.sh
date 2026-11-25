@@ -1,9 +1,9 @@
 #!/bin/sh
 # Quick development build of mudi-imsd: static linux/arm64 (CGO_ENABLED=0) for
 # OpenWrt/musl on the Mudi. GOTOOLCHAIN=auto fetches the Go version of go.mod
-# through proxy.golang.org. Without cgo the AMR-WB codec is not linked in, so
-# the network side negotiates G.711 (PCMA/PCMU); release builds use
-# scripts/build-static.sh. Also runs go vet and go test for the volte library
+# through proxy.golang.org. Without cgo the AMR-WB and AMR codecs are not
+# linked in, so the network side negotiates G.711 (PCMA/PCMU); release builds
+# use scripts/build-static.sh. Also runs go vet and go test for the volte library
 # and the daemon (natively on an arm64 host).
 set -eu
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
