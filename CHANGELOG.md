@@ -4,7 +4,37 @@
 
 Notable changes to MudiVoLTE. The version is in `package/VERSION`; the
 packages and their checksums are on the
-[releases page](https://github.com/xarvel/MudiVoLTE/releases).
+[releases page](https://github.com/davasquezg/MudiVoLTE-CL/releases) of this fork. Versions up to
+0.2.0 are those of the upstream project,
+[xarvel/MudiVoLTE](https://github.com/xarvel/MudiVoLTE/releases).
+
+The fork numbers its releases as the upstream version they build on plus a
+fourth number: 0.2.0.1 is the fork's first release on top of upstream 0.2.0.
+Only digits and dots, so the same string works as the opkg version
+(`0.2.0.1-1`), in the file names, in the git tag (`v0.2.0.1`; git refuses
+`~`) and in the names of the release assets (GitHub renames assets with
+special characters). opkg compares versions the Debian way: 0.2.0.1 is
+newer than upstream 0.2.0 and older than an upstream 0.2.1, so an upstream
+release that came later is an upgrade; the fork's release on top of it is
+0.2.1.1, newer again.
+
+## 0.2.0.1 (unreleased)
+
+First release of the fork, on top of upstream 0.2.0. What changes for
+Chile, and what is still open, is in the
+[fork's issues](https://github.com/davasquezg/MudiVoLTE-CL/issues).
+
+- Spanish: the documentation, and translatable texts in the command line
+  tool and its setup, the GL admin panel page, the LuCI page and the app on
+  the router's screen. The texts of a language come in their own package,
+  `mudi-volte-i18n-<lang>` (`MUDI_VOLTE_LANG=es` in the installer); the
+  first one is Spanish.
+- The line can be on SIM 2 or the built-in eSIM, not only on SIM 1: setup
+  takes the first slot with a ready SIM, `mudi-volte.main.sim_slot`
+  chooses another. Not tested on a router yet.
+- The installer, the releases and security reports are the fork's
+  (`davasquezg/MudiVoLTE-CL`); a release workflow builds and publishes the
+  packages from a `v*` tag.
 
 ## 0.2.0 (2026-11-23)
 

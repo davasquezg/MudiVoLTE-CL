@@ -2,6 +2,11 @@
 
 # MudiVoLTE: calls and SMS on the GL.iNet Mudi 7
 
+> This is a fork of [xarvel/MudiVoLTE](https://github.com/xarvel/MudiVoLTE) adapted for Chile
+> (eSIM, Chilean numbering, Spanish). Its packages and installer come from
+> [this fork's releases](https://github.com/davasquezg/MudiVoLTE-CL/releases); report problems with them
+> in [its issues](https://github.com/davasquezg/MudiVoLTE-CL/issues).
+
 The GL.iNet Mudi 7 (GL-E5800) has a 5G modem, the Quectel RG650V, that officially
 does data only: calls to its SIM go nowhere. MudiVoLTE turns the router into a
 phone line for that SIM. Phones on the router's Wi-Fi run a free SIP app
@@ -64,13 +69,23 @@ The password is the router's admin password, the one you use for its web panel.
 **2. Run the installer.**
 
 ```sh
-wget -qO- https://github.com/xarvel/MudiVoLTE/releases/latest/download/install.sh | sh
+wget -qO- https://github.com/davasquezg/MudiVoLTE-CL/releases/latest/download/install.sh | sh
 ```
 
 In another language, when the release has its translation package
 (`mudi-volte-i18n-<lang>_<version>_all.ipk`), add `MUDI_VOLTE_LANG=<lang>`
 before `sh`, e.g. `| MUDI_VOLTE_LANG=es sh` for Spanish (see
 [Languages](package/README.md#languages)).
+
+> **Needs a release of this fork.** The Spanish package comes only with the
+> fork's releases. Upstream's releases have no translation package, and
+> their installer ignores `MUDI_VOLTE_LANG` and installs in English; a fork
+> release without the requested catalog stops with *"no translation for
+> language es in this release"*. Until the fork
+> publishes its first release on its
+> [releases page](https://github.com/davasquezg/MudiVoLTE-CL/releases), the
+> commands above find no `install.sh`; till then, build the package yourself
+> (see [Build from source](#build-from-source)).
 
 The installer checks that the router is a Mudi 7, downloads the package, checks
 its checksum, installs it and starts the setup. The setup checks the modem and
@@ -113,7 +128,7 @@ That's all. The service starts by itself whenever the router starts.
 
 **No internet on the router.** On a computer, download `install.sh` and
 `mudi-volte_<version>_aarch64_cortex-a53.ipk` from the
-[releases page](https://github.com/xarvel/MudiVoLTE/releases). Copy both to
+[releases page](https://github.com/davasquezg/MudiVoLTE-CL/releases). Copy both to
 the router, log in and run the installer with the package file:
 
 ```sh
@@ -319,7 +334,7 @@ System > Upgrade; on by default for the online upgrade), then run the installer
 again:
 
 ```sh
-wget -qO- https://github.com/xarvel/MudiVoLTE/releases/latest/download/install.sh | sh
+wget -qO- https://github.com/davasquezg/MudiVoLTE-CL/releases/latest/download/install.sh | sh
 ```
 
 Keep Settings keeps `/etc/config/mudi-volte` and `/etc/mudi-volte`, so the
@@ -536,8 +551,8 @@ against a stand-in for the firmware's library, TCP keep-alive) are skipped
 there. The tests of `mudi-dsi-helper` itself need Linux too.
 
 ```sh
-git clone https://github.com/xarvel/MudiVoLTE
-cd MudiVoLTE
+git clone https://github.com/davasquezg/MudiVoLTE-CL
+cd MudiVoLTE-CL
 scripts/build-static.sh   # the first run also builds the toolchain; tests; build/static/
 package/build.sh          # dist/: the .ipk, install.sh and SHA256SUMS
 ```
@@ -547,7 +562,9 @@ the AMR-WB codec inside, and `mudi-dsi-helper` linked against musl the dynamic
 way: it has to load a library of the firmware. To install your own build, copy
 `dist/install.sh` and the `.ipk` to the router as in "No internet on the
 router" above. `scripts/build-imsd.sh` is a quicker build without the codec,
-for development: its network side offers only G.711.
+for development: its network side offers only G.711. The fork's releases
+are built on GitHub by `.github/workflows/release.yml` (see
+[CONTRIBUTING.md](CONTRIBUTING.md#releases)).
 
 | Directory | Contents |
 |---|---|

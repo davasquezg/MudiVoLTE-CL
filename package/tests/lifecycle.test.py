@@ -3,6 +3,8 @@
 
 No router, root privileges or network needed. BusyBox ash when available,
 otherwise /bin/sh. Absolute device/config paths are replaced before execution.
+On Windows it runs with a busybox (or a shim that starts Git Bash's sh) on
+PATH; the one test that needs POSIX process ids is skipped there.
 """
 import hashlib
 import os
@@ -16,8 +18,15 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SHELL = [shutil.which("busybox"), "ash"] if shutil.which("busybox") else ["/bin/sh"]
-SOURCE, DISPATCH = (ROOT / "package/files/usr/sbin/mudi-volte").read_text().split('\ncase "${1:-}" in\n', 1)
-VERSION = (ROOT / "package/VERSION").read_text().strip()
+# Windows (native Python, a busybox or sh from Git Bash/MSYS2 on PATH) cannot
+# start a script by its #! line: the tests start the scripts through SHELL
+# there, and the scripts the shell starts in turn get the shell's own /bin/sh
+# (SHELL[0] is a Windows path, which a #! line cannot hold). POSIX hosts run
+# exactly as before.
+WINDOWS = os.name == "nt"
+SHEBANG = "#!/bin/sh" if WINDOWS else "#!" + " ".join(SHELL)
+SOURCE, DISPATCH = (ROOT / "package/files/usr/sbin/mudi-volte").read_text(encoding="utf-8").split('\ncase "${1:-}" in\n', 1)
+VERSION = (ROOT / "package/VERSION").read_text(encoding="utf-8").strip()
 # prerm finds opkg's flags in /proc, the CLI tells a live run by its /proc
 # entry. A host without /proc (macOS) gets a /proc of the sandbox for prerm
 # (FAKE_PROC) and kill -0 for the CLI.
@@ -90,12 +99,12 @@ class Lifecycle(unittest.TestCase):
         # Replace even unused absolute paths: a mistake must not affect the host.
         src = SOURCE.replace("/etc/init.d/gl_screen", "screen_stub")
         src = src.replace("/etc/init.d/mudi-screen", "mudi_screen_stub")
-        src = src.replace("/etc/config/mudi-volte", str(self.sb / "config"))
+        src = src.replace("/etc/config/mudi-volte", (self.sb / "config").as_posix())
         self.base = src + "\n" + STUBS
 
     def script(self, command, name="case.sh"):
         p = self.sb / name
-        p.write_text(self.base + "\n" + command + "\n")
+        p.write_text(self.base + "\n" + command + "\n", encoding="utf-8", newline="\n")
         return p
 
     def run_case(self, command, **env):
@@ -105,12 +114,12 @@ class Lifecycle(unittest.TestCase):
 
     def read(self, name):
         p = self.sb / name
-        return p.read_text() if p.exists() else ""
+        return p.read_text(encoding="utf-8") if p.exists() else ""
 
     def saved(self):
         (self.sb / "data").mkdir(exist_ok=True)
         (self.sb / "data/modem.orig").write_text(
-            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n")
+            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n", encoding="utf-8", newline="\n")
 
     def test_uninstall_without_backup_does_not_change_builtin_modem(self):
         r = self.run_case("restore_builtin remove", MODE="1")
@@ -122,7 +131,7 @@ class Lifecycle(unittest.TestCase):
         for failed in ('QCFG="ims"', 'voice_disable', 'voice_domain', 'ue_usage_setting'):
             with self.subTest(failed=failed):
                 self.saved()
-                (self.sb / "events").write_text("")
+                (self.sb / "events").write_text("", encoding="utf-8", newline="\n")
                 r = self.run_case("restore_builtin remove", MODE="2", FAIL_AT=failed)
                 self.assertNotEqual(r.returncode, 0)
                 self.assertTrue((self.sb / "data/modem.orig").exists())
@@ -162,7 +171,7 @@ class Lifecycle(unittest.TestCase):
         self.assertIn("ue_usage=0\n", saved)
 
     def test_init_keeps_each_allowed_number_as_one_value(self):
-        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text()
+        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text(encoding="utf-8")
         init = init.replace(". /usr/share/libubox/jshn.sh", "")
         command = init + r'''
 config_get() { eval "$1=\$4"; }
@@ -218,7 +227,7 @@ build_config
     def test_qr_without_mudiscreen(self):
         # MudiScreen not installed: GL.iNet's screen is stopped for the code and
         # started again, as in 0.1.0, and nothing asks for MudiScreen.
-        (self.sb / "busy").write_text("2")
+        (self.sb / "busy").write_text("2", encoding="utf-8", newline="\n")
         r = self.run_case("screen_loop alpha 1 url", QR_SECS="0.05", MUDI_SCREEN="absent")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.read("events").splitlines(),
@@ -348,12 +357,12 @@ class RawPackageRemoval(unittest.TestCase):
         self.sb = sb = Path(self.tmp.name)
         (sb / "data").mkdir()
         (sb / "data/modem.orig").write_text(
-            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n")
-        (sb / "data/push.json").write_text("[]\n")
-        (sb / "config").write_text("config voip 'main'\n\toption enabled '1'\n")
+            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n", encoding="utf-8", newline="\n")
+        (sb / "data/push.json").write_text("[]\n", encoding="utf-8", newline="\n")
+        (sb / "config").write_text("config voip 'main'\n\toption enabled '1'\n", encoding="utf-8", newline="\n")
         (sb / "run").mkdir()
-        (sb / "run/imsd.json").write_text("{}\n")
-        (sb / "installed").write_text(VERSION + "-1\n")
+        (sb / "run/imsd.json").write_text("{}\n", encoding="utf-8", newline="\n")
+        (sb / "installed").write_text(VERSION + "-1\n", encoding="utf-8", newline="\n")
         (sb / "info").mkdir()
         for name in ("prerm", "postrm"):
             self.executable("info/" + name, self.maintainer_script(name))
@@ -364,11 +373,11 @@ class RawPackageRemoval(unittest.TestCase):
 
     def executable(self, name, body):
         p = self.sb / name
-        p.write_text("#!" + " ".join(SHELL) + "\n" + body)
+        p.write_text(SHEBANG + "\n" + body,encoding="utf-8", newline="\n")
         p.chmod(0o755)
 
     def maintainer_script(self, name):
-        s = (ROOT / "package/control" / name).read_text()
+        s = (ROOT / "package/control" / name).read_text(encoding="utf-8")
         for a, b in (("/var/run/mudi-volte-removal", "$SB/removal"),
                      ("/var/run/mudi-volte", "$SB/run"),
                      ("/usr/sbin/mudi-volte", "$SB/cli"),
@@ -397,7 +406,7 @@ nginx() { echo "nginx $*" >>"$SB/events"; }
         """The CLI with the stubs of Lifecycle, as an executable file; the real
         ask, which records each question."""
         src = SOURCE.replace("/etc/init.d/gl_screen", "screen_stub")
-        src = src.replace("/etc/config/mudi-volte", str(self.sb / "config"))
+        src = src.replace("/etc/config/mudi-volte", (self.sb / "config").as_posix())
         if not HOST_PROC:
             src = swap(src, '[ -d "/proc/$pid" ]', 'kill -0 "$pid" 2>/dev/null')
         src = swap(src, "\nask() {", "\nreal_ask() {")
@@ -413,15 +422,19 @@ nginx() { echo "nginx $*" >>"$SB/events"; }
         env = {**os.environ, "SB": str(self.sb), **EXTERNAL, **env}
         if path:
             env["PATH"] = path + os.pathsep + env["PATH"]
+        if WINDOWS and args[:len(SHELL)] != SHELL:
+            args = SHELL + list(args)
         return subprocess.run(args, env=env, text=True, capture_output=True, timeout=30,
                               stdin=subprocess.DEVNULL, start_new_session=True)
 
     def opkg(self, *args, **env):
-        return self.run_sh([str(self.sb / "bin/opkg"), *args], **env)
+        # prerm looks for "/opkg" on opkg's command line; on Windows str()
+        # would give it backslashes (on POSIX both are the same).
+        return self.run_sh([(self.sb / "bin/opkg").as_posix(), *args], **env)
 
     def read(self, name):
         p = self.sb / name
-        return p.read_text() if p.exists() else ""
+        return p.read_text(encoding="utf-8") if p.exists() else ""
 
     def events(self):
         return self.read("events").splitlines()
@@ -529,15 +542,15 @@ nginx() { echo "nginx $*" >>"$SB/events"; }
     def test_reinstall_by_install_sh_keeps_the_modem_and_the_data(self):
         sb = self.sb
         ipk = self.ipk(VERSION)
-        script = (ROOT / "package/install.sh.in").read_text()
-        script = swap(script, "/proc/device-tree/model", str(sb / "model"))
+        script = (ROOT / "package/install.sh.in").read_text(encoding="utf-8")
+        script = swap(script, "/proc/device-tree/model", (sb / "model").as_posix())
         script = script.replace("@VERSION@", VERSION).replace("@BASE_URL@", "http://example.invalid")
         script = swap(script, "@SHA256@", hashlib.sha256(ipk.read_bytes()).hexdigest())
         # Not a stub of id on PATH: a BusyBox built to prefer its applets (as on
         # the CI runner) runs its own id and never looks at PATH.
         script = swap(script, '[ "$(id -u)" = 0 ]', "[ 0 = 0 ]")
-        (sb / "install.sh").write_text(script)
-        (sb / "model").write_text("GL.iNet GL-E5800\0")
+        (sb / "install.sh").write_text(script, encoding="utf-8", newline="\n")
+        (sb / "model").write_text("GL.iNet GL-E5800\0", encoding="utf-8", newline="\n")
         self.executable("bin/uci", 'echo "uci $*" >>"$SB/events"\n')
         r = self.run_sh(SHELL + [str(sb / "install.sh"), str(ipk)], path=str(sb / "bin"))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -653,10 +666,10 @@ class FailedSetup(unittest.TestCase):
         self.sb = sb = Path(self.tmp.name)
         (sb / "lpm").mkdir()
         for k, v in LPM.items():
-            (sb / "lpm" / k).write_text(v + "\n")
+            (sb / "lpm" / k).write_text(v + "\n", encoding="utf-8", newline="\n")
         src = SOURCE.replace("/etc/init.d/gl_screen", "screen_stub")
-        src = swap(src, "/etc/init.d/lpm_monitor", str(sb / "lpm_monitor"))
-        src = src.replace("/etc/config/mudi-volte", str(sb / "config"))
+        src = swap(src, "/etc/init.d/lpm_monitor", (sb / "lpm_monitor").as_posix())
+        src = src.replace("/etc/config/mudi-volte", (sb / "config").as_posix())
         stubs = swap(STUBS, "power_saving_off() { :; }\npower_saving_restore() { :; }\n", "")
         # FAIL_UNDO: a second value the modem refuses, for a failed undo.
         stubs = swap(stubs, ' case "$1" in *"${FAIL_AT:-not-a-command}"*) return 1 ;; esac\n',
@@ -667,13 +680,13 @@ class FailedSetup(unittest.TestCase):
 
     def setup(self, *args, **env):
         p = self.sb / "case.sh"
-        p.write_text(self.base + "\ncmd_setup " + " ".join(args) + "\n")
+        p.write_text(self.base + "\ncmd_setup " + " ".join(args) + "\n", encoding="utf-8", newline="\n")
         return subprocess.run(SHELL + [str(p)], env={**os.environ, "SB": str(self.sb), **env},
                               text=True, capture_output=True, timeout=10)
 
     def read(self, name):
         p = self.sb / name
-        return p.read_text() if p.exists() else ""
+        return p.read_text(encoding="utf-8") if p.exists() else ""
 
     def lpm(self):
         return {k: self.read("lpm/" + k).strip() for k in LPM}
@@ -735,7 +748,7 @@ class FailedSetup(unittest.TestCase):
     def test_values_saved_by_an_earlier_setup_stay(self):
         (self.sb / "data").mkdir()
         saved = "ims=0\nvoice_disable=3\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n"
-        (self.sb / "data/modem.orig").write_text(saved)
+        (self.sb / "data/modem.orig").write_text(saved, encoding="utf-8", newline="\n")
         r = self.setup(FAIL_AT="voice_domain")
         self.assertLeftAlone(r)
         self.assertEqual(self.read("data/modem.orig"), saved)
@@ -777,14 +790,14 @@ class WebPageRuns(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.sb = sb = Path(self.tmp.name)
         (sb / "data").mkdir()
-        (sb / "config").write_text("config voip 'main'\n")
+        (sb / "config").write_text("config voip 'main'\n", encoding="utf-8", newline="\n")
         cli = swap(RawPackageRemoval.cli(self), 'modem_reboot() { echo reboot >>"$SB/events"; }',
                    'modem_reboot() { echo "reboot, state $(cat "$SETUP_STATE")" >>"$SB/events"; }')
         self.executable("cli", cli)
 
     def saved(self):
         (self.sb / "data/modem.orig").write_text(
-            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n")
+            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n", encoding="utf-8", newline="\n")
 
     def background(self, *args, **env):
         """Start a run as the pages do; wait for its end, return its code."""
@@ -839,8 +852,10 @@ class WebPageRuns(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("unknown option --no-such-option", self.read("setup.log"))
 
+    @unittest.skipIf(WINDOWS, "the pids of Python's processes are Windows pids, which the "
+                     "shell's kill -0 and /proc (MSYS) do not know")
     def test_one_run_at_a_time(self):
-        (self.sb / "setup.state").write_text("running %d\n" % os.getpid())
+        (self.sb / "setup.state").write_text("running %d\n" % os.getpid(), encoding="utf-8", newline="\n")
         r = self.run_sh([str(self.sb / "cli"), "setup", "--detach"], **OWN_VOICE)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("running already", r.stderr)
@@ -848,7 +863,7 @@ class WebPageRuns(unittest.TestCase):
         # A wrapper that was killed: its process is gone, a new run may start.
         gone = subprocess.Popen(["true"])
         gone.wait()
-        (self.sb / "setup.state").write_text("running %d\n" % gone.pid)
+        (self.sb / "setup.state").write_text("running %d\n" % gone.pid, encoding="utf-8", newline="\n")
         self.assertEqual(self.background("setup", "--detach", **OWN_VOICE), 0)
 
 
@@ -866,17 +881,17 @@ class FirmwareUpdate(unittest.TestCase):
         return [line for line in text.splitlines() if line and not line.startswith("#")]
 
     def test_the_data_of_the_line_is_kept(self):
-        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text()
+        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text(encoding="utf-8")
         paths = {"/etc/config/mudi-volte"}
         paths.update(re.findall(r"json_add_string \w+ (/etc/\S+)", init))
         paths.add(re.search(r"^DATA=(/\S+)$", SOURCE, re.M).group(1) + "/")
         for go in sorted((ROOT / "src/imsd").glob("*.go")):
             if not go.name.endswith("_test.go"):
                 # GL's SMS spool belongs to GL, whose own rule keeps /etc/spool.
-                paths.update(p for p in re.findall(r'"(/etc/[^"]+)"', go.read_text())
+                paths.update(p for p in re.findall(r'"(/etc/[^"]+)"', go.read_text(encoding="utf-8"))
                              if not p.startswith("/etc/spool/"))
         self.assertGreater(len(paths), 5, paths)
-        kept = self.kept(self.RULE.read_text())
+        kept = self.kept(self.RULE.read_text(encoding="utf-8"))
         for p in sorted(paths):
             self.assertTrue(any(p == k or (k.endswith("/") and p.startswith(k)) for k in kept),
                             "a firmware update loses " + p)
@@ -884,7 +899,7 @@ class FirmwareUpdate(unittest.TestCase):
     def test_the_rule_survives_its_neighbours(self):
         # A file without a final newline glues its last line to the first line
         # of the next file (luci-base comes before this one, netifd after it).
-        text = self.RULE.read_text()
+        text = self.RULE.read_text(encoding="utf-8")
         joined = "/etc/luci-uploads" + text + "/etc/udhcpc.user.d/\n"
         for p in self.kept(text):
             self.assertIn(p, self.kept(joined))
@@ -938,13 +953,13 @@ class SimSlot(unittest.TestCase):
 
     def run_case(self, command, **env):
         p = self.sb / "case.sh"
-        p.write_text(self.base + "\n" + command + "\n", newline="\n")
+        p.write_text(self.base + "\n" + command + "\n", newline="\n", encoding="utf-8")
         return subprocess.run(SHELL + [str(p)], env={**os.environ, "SB": str(self.sb), **env},
                               text=True, capture_output=True, timeout=20)
 
     def lines(self):
         p = self.sb / "ubus"
-        return p.read_text().splitlines() if p.exists() else []
+        return p.read_text(encoding="utf-8").splitlines() if p.exists() else []
 
     def test_slot_1_first(self):
         r = self.run_case('pick_sim; echo "slot $SIM"', READY="1 2")
@@ -965,14 +980,14 @@ class SimSlot(unittest.TestCase):
         self.assertTrue(any('QCFG=\\"ims\\",2' in l for l in after), after)
 
     def test_slot_set_in_the_config_is_kept(self):
-        (self.sb / "sim_slot").write_text("2\n")
+        (self.sb / "sim_slot").write_text("2\n", encoding="utf-8", newline="\n")
         r = self.run_case('pick_sim; echo "slot $SIM"', READY="1 2")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("slot 2", r.stdout)
         self.assertFalse(any("QUIMSUB=1" in l for l in self.lines()))
 
     def test_configured_slot_without_a_ready_sim_fails(self):
-        (self.sb / "sim_slot").write_text("2\n")
+        (self.sb / "sim_slot").write_text("2\n", encoding="utf-8", newline="\n")
         r = self.run_case('pick_sim; echo "slot $SIM"', READY="1")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("no SIM ready in slot 2", r.stderr)
@@ -980,7 +995,7 @@ class SimSlot(unittest.TestCase):
     def test_earlier_setup_stays_on_slot_1(self):
         # Installed before the slot became a setting: the modem was switched
         # in SUB1, and a restore has to go there too.
-        (self.sb / "data/modem.orig").write_text("ims=1\n")
+        (self.sb / "data/modem.orig").write_text("ims=1\n", encoding="utf-8", newline="\n")
         r = self.run_case('pick_sim; echo "slot $SIM"', READY="1 2")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("slot 1", r.stdout)
@@ -989,6 +1004,64 @@ class SimSlot(unittest.TestCase):
         r = self.run_case('pick_sim', READY="")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("no SIM ready in slot 1 or slot 2", r.stderr)
+
+
+def opkg_verrevcmp(val, ref):
+    """opkg's version comparison (libopkg/pkg.c of opkg-lede, from dpkg):
+    '~' before anything, even the end; letters before the other characters;
+    runs of digits compared as numbers."""
+    def order(c):
+        if c == "~":
+            return -1
+        if not c or c.isdigit():
+            return 0
+        if c.isalpha():
+            return ord(c)
+        return ord(c) + 256
+    i = j = 0
+    while i < len(val) or j < len(ref):
+        while (i < len(val) and not val[i].isdigit()) or (j < len(ref) and not ref[j].isdigit()):
+            vc = order(val[i] if i < len(val) else "")
+            rc = order(ref[j] if j < len(ref) else "")
+            if vc != rc:
+                return vc - rc
+            i += 1
+            j += 1
+        m = re.match(r"\d*", val[i:]).group()
+        n = re.match(r"\d*", ref[j:]).group()
+        i += len(m)
+        j += len(n)
+        if int(m or 0) != int(n or 0):
+            return int(m or 0) - int(n or 0)
+    return 0
+
+
+class Version(unittest.TestCase):
+    """The fork's version: the upstream version it builds on plus a fourth
+    number (CHANGELOG.md)."""
+
+    def test_digits_and_dots_only(self):
+        # The same string is the opkg version, part of the file names, the git
+        # tag (no '~') and the release assets' names (GitHub renames special
+        # characters); build.sh puts it into sed replacements and install.sh
+        # into a grep pattern.
+        self.assertRegex(VERSION, r"^\d+\.\d+\.\d+\.\d+$")
+
+    def test_sorts_between_its_upstream_version_and_the_next(self):
+        major, minor, patch, _ = (int(x) for x in VERSION.split("."))
+        upstream = "%d.%d.%d" % (major, minor, patch)
+        self.assertGreater(opkg_verrevcmp(VERSION, upstream), 0)
+        for later in ("%d.%d.%d" % (major, minor, patch + 1), "%d.%d.0" % (major, minor + 1)):
+            self.assertLess(opkg_verrevcmp(VERSION, later), 0, later)
+            # The fork's release on top of a later upstream one is newer again.
+            self.assertGreater(opkg_verrevcmp(later + ".1", later), 0, later)
+
+    def test_comparison_as_opkg(self):
+        self.assertEqual(opkg_verrevcmp("0.2.0", "0.2.0"), 0)
+        self.assertLess(opkg_verrevcmp("0.2.0~cl1", "0.2.0"), 0)  # '~' sorts first
+        self.assertGreater(opkg_verrevcmp("0.2.0+cl1", "0.2.0"), 0)
+        self.assertLess(opkg_verrevcmp("0.2.0.9", "0.2.0.10"), 0)  # numbers, not text
+        self.assertLess(opkg_verrevcmp("0.9", "0.10"), 0)
 
 
 if __name__ == "__main__":

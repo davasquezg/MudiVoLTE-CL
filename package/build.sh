@@ -8,7 +8,8 @@
 # and so does mudi-dsi-helper (dynamic, for the firmware's musl); pass
 # MUDI_IMSD_BIN or MUDI_DSI_HELPER_BIN to package another binary.
 # MUDI_VOLTE_BASE_URL is where install.sh downloads the .ipk from (the release
-# page of the hosting).
+# page of the hosting); by default the release v<version> of this fork,
+# davasquezg/MudiVoLTE-CL (upstream xarvel/MudiVoLTE publishes its own).
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -19,7 +20,7 @@ ipk=mudi-volte_${ver}_${arch}.ipk
 out=$root/dist
 bin=${MUDI_IMSD_BIN:-$root/build/static/mudi-imsd}
 helper=${MUDI_DSI_HELPER_BIN:-$root/build/static/mudi-dsi-helper}
-base_url=${MUDI_VOLTE_BASE_URL:-https://github.com/xarvel/MudiVoLTE/releases/download/v$ver}
+base_url=${MUDI_VOLTE_BASE_URL:-https://github.com/davasquezg/MudiVoLTE-CL/releases/download/v$ver}
 # Reproducible archives: fixed timestamps, owners and order.
 epoch=${SOURCE_DATE_EPOCH:-$(date -d "$(stat -c %y "$pkg/VERSION")" +%s)}
 

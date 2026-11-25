@@ -1,0 +1,124 @@
+# Release: builds the packages and publishes them as a GitHub release of this
+# repository. Runs on a pushed tag v<version>, where <version> is the one in
+# package/VERSION (git tag v0.2.0.1 && git push origin v0.2.0.1), or on
+# request for such a tag (Actions > Release > Run workflow), e.g. to build a
+# release again after a failed run.
+#
+# The static build (scripts/build-static.sh, package/toolchain/fetch-and-build.sh)
+# needs an arm64 Debian host: it runs `apt-get download` for the pinned musl
+# packages of Debian 13 (trixie, version 1.2.5-3.1~deb13u1), which Ubuntu's
+# archive does not have, and the fixed GCC license texts in package/licenses
+# are those of trixie's gcc-14. So the job runs in a debian:trixie container
+# on GitHub's arm64 runner; the tests of the static build run natively there.
+# To verify on GitHub: ubuntu-24.04-arm is offered for public repositories
+# (a private one needs a plan with arm64 runners). If Debian replaces musl in
+# a point release, apt-get download of the pinned version fails: update the
+# version and hashes in fetch-and-build.sh then.
+#
+# The release holds dist/ as package/build.sh makes it: the mudi-volte .ipk,
+# one mudi-volte-i18n-<lang> .ipk per catalog in package/po, install.sh
+# (which downloads from this release) and SHA256SUMS. The notes are the
+# section of CHANGELOG.md for the version.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and publish (v followed by package/VERSION)"
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    name: Static build and packages (arm64 Debian)
+    runs-on: ubuntu-24.04-arm
+    container: debian:trixie
+    steps:
+      - name: Build tools from Debian
+        # git before the checkout, so that it is a real clone (commit time,
+        # VCS stamp of the Go build); the rest is what fetch-and-build.sh,
+        # build-static.sh and build.sh call (apt-get and dpkg-deb are in the
+        # image).
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl file git python3
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/imsd/go.mod
+          cache: false
+      - name: The tag matches package/VERSION
+        run: |
+          # The container runs as root, the checkout belongs to the runner.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          ver=$(cat package/VERSION)
+          if [ "$TAG" != "v$ver" ]; then
+            echo "error: tag $TAG, but package/VERSION is $ver (expected tag v$ver)" >&2
+            exit 1
+          fi
+          echo "VERSION=$ver" >>"$GITHUB_ENV"
+          # Reproducible archives: the time of the tagged commit.
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >>"$GITHUB_ENV"
+      - name: Static mudi-imsd and mudi-dsi-helper (toolchain, tests, licenses)
+        run: sh scripts/build-static.sh
+      - name: Packages and installer
+        env:
+          MUDI_VOLTE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ env.TAG }}
+        run: |
+          sh package/build.sh
+          # collect-licenses.sh rebuilt package/licenses for this binary: a
+          # difference to the committed texts belongs in the next commit.
+          git status --short package/licenses
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          sparse-checkout: |
+            CHANGELOG.md
+            package/VERSION
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Create the release, or update its files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ver=$(cat package/VERSION)
+          # The changelog section of the version: from its heading to the next.
+          awk -v v="$ver" '
+            index($0, "## " v " ") == 1 { on = 1; next }
+            on && /^## / { exit }
+            on { print }' CHANGELOG.md >notes.md
+          [ -s notes.md ] || echo "MudiVoLTE $ver." >notes.md
+          ls -l dist
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" dist/* --verify-tag --repo "$GITHUB_REPOSITORY" \
+              --title "MudiVoLTE $ver" --notes-file notes.md
+          fi
