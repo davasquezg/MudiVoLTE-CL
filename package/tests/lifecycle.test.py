@@ -75,6 +75,8 @@ voice_disable() { echo "${VD:-2}"; }
 mode_pref() { echo AUTO; }
 voice_domain() { echo "${VDOM:-3}"; }
 ue_usage() { echo "${UE:-0}"; }
+# SA=none: the modem gives no value for nr5g_disable_mode.
+nr5g_disable_mode() { [ "${SA:-0}" = none ] || echo "${SA:-0}"; }
 at() { echo 001010000000000; }
 at_set() {
  echo "$1" >>"$SB/at"
@@ -162,6 +164,47 @@ class Lifecycle(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("enabled=1", self.read("events"))
         self.assertIn("reboot", self.read("events"))
+
+    def test_restore_gives_5g_standalone_back(self):
+        # Saved by setup --no-sa: written back last, then committed.
+        for sa, writes in (("1", ['AT+QNWPREFCFG="nr5g_disable_mode",0']), ("0", [])):
+            with self.subTest(now=sa):
+                self.saved_sa()
+                (self.sb / "at").unlink(missing_ok=True)
+                r = self.run_case("modem_give_back", SA=sa, **EXTERNAL)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(self.read("at").splitlines(), WRITES + writes + ["AT+QEFSSYNC=0"])
+
+    def test_refused_5g_standalone_restore_sets_everything_back(self):
+        self.saved_sa()
+        r = self.run_case("modem_give_back", SA="1", FAIL_AT='nr5g_disable_mode",0', **EXTERNAL)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("could not restore nr5g_disable_mode 0", r.stderr)
+        self.assertEqual(self.read("at").splitlines(),
+                         WRITES + ['AT+QNWPREFCFG="nr5g_disable_mode",0',
+                                   'AT+QNWPREFCFG="ue_usage_setting",1', 'AT+QNWPREFCFG="voice_domain",1',
+                                   'AT+QCALLCFG="voice_disable",3', 'AT+QCFG="ims",2'])
+
+    def saved_sa(self):
+        self.saved()
+        with (self.sb / "data/modem.orig").open("a") as f:
+            f.write("nr5g_disable_mode=0\n")
+
+    def test_5g_standalone_reply_parsing(self):
+        # The real nr5g_disable_mode (STUBS replace it): the reply format is
+        # not verified on the router, so the read takes spaces around the
+        # comma and a CR, and gives nothing for a reply without a digit.
+        real = re.search(r"^nr5g_disable_mode\(\) \{.*\}$", SOURCE, re.M).group(0)
+        for reply, value in (('+QNWPREFCFG: "nr5g_disable_mode",0\r', "0"),
+                             ('+QNWPREFCFG: "nr5g_disable_mode" , 1', "1"),
+                             ('+QNWPREFCFG: "nr5g_disable_mode",2', "2"),
+                             ('+QNWPREFCFG: "nr5g_disable_mode",', ""),
+                             ("ERROR", "")):
+            with self.subTest(reply=reply):
+                r = self.run_case(real + '\nat() { printf \'%s\\n\' "$REPLY_AT"; }\n'
+                                  'echo "[$(nr5g_disable_mode)]"', REPLY_AT=reply)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(r.stdout.strip(), "[%s]" % value)
 
     def test_external_without_backup_uses_factory_voice_defaults(self):
         r = self.run_case("save_orig", MODE="2", VDOM="1", UE="1")
@@ -338,6 +381,34 @@ build_config
                 if library != "available":
                     self.assertIn("cannot load the firmware's DSI API", r.stderr)
                     self.assertEqual(self.read("at"), "")
+
+    def test_country_codes_of_latin_america(self):
+        # Issue #4: a Chilean SIM (MCC 730) left the country code empty. MCCs
+        # that several calling codes share stay without one.
+        want = {"730": "56", "716": "51", "732": "57", "722": "54", "724": "55", "334": "52",
+                "702": "501", "750": "500", "370": "1", "342": "1", "368": "53", "372": "509",
+                "363": "297", "214": "34", "340": "", "362": "", "001": ""}
+        r = self.run_case("for m in %s; do echo \"$m=$(country_code $m)\"; done" % " ".join(want))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.splitlines(), ["%s=%s" % kv for kv in want.items()])
+
+    def test_setup_says_the_country_code_it_chose(self):
+        # No country set yet, a Chilean SIM; the question is answered no.
+        r = self.run_case('uci() { echo "uci $*" >>"$SB/events"; }\n'
+                          "at() { echo 730010000000000; }\ncmd_setup", AGREE="no")
+        self.assertIn("Country calling code: +56, chosen from the MCC of the SIM", r.stdout)
+        self.assertIn("uci set mudi-volte.main.country=56", self.read("events"))
+
+    def test_setup_says_the_country_code_set_before(self):
+        r = self.run_case("cmd_setup", AGREE="no")
+        self.assertIn("Country calling code: +44 (mudi-volte.main.country).", r.stdout)
+        self.assertNotIn("set mudi-volte.main.country", self.read("events"))
+
+    def test_setup_says_when_it_knows_no_country_code(self):
+        r = self.run_case('uci() { echo "uci $*" >>"$SB/events"; }\ncmd_setup', AGREE="no")
+        self.assertIn("No country calling code known for MCC 001", r.stdout)
+        self.assertIn("uci set mudi-volte.main.country=CODE", r.stdout)
+        self.assertNotIn("set mudi-volte.main.country", self.read("events"))
 
     def test_qr_handoff_restores_screen_only_after_last_code(self):
         first = subprocess.Popen(SHELL + [str(self.script("screen_loop alpha 30 url", "first.sh"))],
@@ -783,6 +854,8 @@ SETUP = ['AT+QCFG="ims",2', 'AT+QCALLCFG="voice_disable",3',
 BEFORE = ['AT+QCFG="ims",1', 'AT+QCALLCFG="voice_disable",2',
           'AT+QNWPREFCFG="ue_usage_setting",0', 'AT+QNWPREFCFG="voice_domain",3']
 OWN_VOICE = {"MODE": "1", "VD": "2", "VDOM": "3", "UE": "0"}
+# setup --no-sa: 5G standalone off, after the values above.
+NO_SA = 'AT+QNWPREFCFG="nr5g_disable_mode",1'
 
 
 class FailedSetup(unittest.TestCase):
@@ -852,6 +925,77 @@ class FailedSetup(unittest.TestCase):
         self.assertLeftAlone(r)
         self.assertEqual(self.read("at").splitlines(),
                          SETUP + ['AT+QNWPREFCFG="mode_pref",LTE:NR5G'] + BEFORE[::-1])
+
+    def test_no_sa_turns_5g_standalone_off(self):
+        # Issue #7: --lte-only (mode_pref LTE:NR5G) leaves 5G SA on, where the
+        # line does not come up. --no-sa writes nr5g_disable_mode 1 last and
+        # keeps the value from before for the restore.
+        r = self.setup("--no-sa")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), SETUP + [NO_SA])
+        self.assertIn("nr5g_disable_mode=0\n", self.read("data/modem.orig"))
+
+    def test_setup_without_no_sa_keeps_5g_standalone(self):
+        r = self.setup()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("nr5g_disable_mode", self.read("at") + self.read("data/modem.orig"))
+
+    def test_refused_sa_off_fails_the_setup(self):
+        r = self.setup("--no-sa", FAIL_AT="nr5g_disable_mode")
+        self.assertLeftAlone(r)
+        self.assertIn("the modem refused " + NO_SA, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), SETUP + [NO_SA] + BEFORE[::-1])
+        self.assertFalse((self.sb / "data/modem.orig").exists())  # saved by this run
+
+    def test_refused_sa_off_takes_its_saved_value_out_again(self):
+        # modem.orig of an earlier setup without --no-sa stays as it was.
+        (self.sb / "data").mkdir()
+        saved = "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n"
+        (self.sb / "data/modem.orig").write_text(saved)
+        r = self.setup("--no-sa", FAIL_AT="nr5g_disable_mode")
+        self.assertLeftAlone(r)
+        self.assertEqual(self.read("data/modem.orig"), saved)
+
+    def test_unanswered_sa_read_fails_the_setup(self):
+        r = self.setup("--no-sa", SA="none")
+        self.assertLeftAlone(r)
+        self.assertIn("could not read nr5g_disable_mode", r.stderr)
+        self.assertEqual(self.read("at").splitlines(), SETUP + BEFORE[::-1])
+
+    def setup_external(self, *args, **env):
+        """setup on a modem already in External VoLTE mode with the voice
+        values of setup, as after an earlier setup; the radio cycle is a stub."""
+        p = self.sb / "case.sh"
+        p.write_text(self.base + '\nradio_cycle() { echo cycle >>"$SB/events"; }\ncmd_setup '
+                     + " ".join(args) + "\n")
+        return subprocess.run(SHELL + [str(p)], env={**os.environ, "SB": str(self.sb), **EXTERNAL, **env},
+                              text=True, capture_output=True, timeout=10)
+
+    def test_no_sa_on_external_mode_turns_5g_standalone_off(self):
+        # The likely path of #7: setup ran before, the line does not come up
+        # on a 5G SA network, and setup --no-sa runs again. Only the new value
+        # is written, kept for the restore, and the radio reconnects.
+        r = self.setup_external("--no-sa")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), [NO_SA, "AT+QEFSSYNC=0"])
+        self.assertIn("nr5g_disable_mode=0\n", self.read("data/modem.orig"))
+        ev = self.read("events").splitlines()
+        self.assertIn("cycle", ev)
+        self.assertLess(ev.index("init stop"), ev.index("cycle"))
+
+    def test_refused_sa_off_on_external_mode_fails_the_setup(self):
+        r = self.setup_external("--no-sa", FAIL_AT="nr5g_disable_mode")
+        self.assertLeftAlone(r)
+        self.assertIn("the modem refused " + NO_SA, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), [NO_SA])
+        self.assertFalse((self.sb / "data/modem.orig").exists())  # saved by this run
+        self.assertNotIn("cycle", self.read("events"))
+
+    def test_no_sa_on_external_mode_with_sa_already_off_writes_nothing(self):
+        r = self.setup_external("--no-sa", SA="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read("at"), "")
+        self.assertNotIn("cycle", self.read("events"))
 
     def test_refused_mode_switch_keeps_sleep_settings(self):
         # Review 14.11 (docs): "a failed setup leaves the router as it was",

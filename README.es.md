@@ -32,13 +32,15 @@ configuración), el registro y una llamada entrante contestada en un iPhone
 despertado por una notificación push.
 
 > **Antes de empezar.** No se garantiza que los números de emergencia (112, 911,
-> 999 y similares; en Chile 131 SAMU, 132 Bomberos, 133 Carabineros, 134 PDI,
-> 136, 137 y 138) funcionen a través de MudiVoLTE: mantén un teléfono con su
+> 999 y similares; en Chile, 131 ambulancia del SAMU, 132 Bomberos, 133
+> Carabineros, 134 PDI, 136 Cuerpo de Socorro Andino, 137 búsqueda y salvamento
+> marítimo y 138 rescate aéreo, una lista aún no contrastada con una fuente
+> oficial chilena) funcionen a través de MudiVoLTE: mantén un teléfono con su
 > propia SIM para ellos. MudiVoLTE los deja pasar diga lo que diga `dial` (en
 > Chile con `country` 56, que la configuración inicial completa desde una SIM
 > chilena), pero los marca como una llamada común, no como una llamada de
-> emergencia IMS (ver
-> [package/README.es.md](package/README.es.md#números)). Ejecutar el cliente IMS del operador en un router puede
+> emergencia IMS (ver [package/README.es.md](package/README.es.md#números)).
+> Ejecutar el cliente IMS del operador en un router puede
 > ir en contra de las condiciones de tu contrato móvil; revísalas. MudiVoLTE es
 > un proyecto personal, probado con un solo operador, y se entrega sin ninguna
 > garantía (ver [LICENSE](LICENSE)).
@@ -550,8 +552,11 @@ de redes móviles, puede pasar por un relay, con más retardo.
   después (ver [Actualizaciones del firmware GL](#actualizaciones-del-firmware-gl)).
   Hasta entonces el módem se queda en modo External VoLTE y las llamadas no se
   contestan.
-- No se garantiza que las llamadas de emergencia funcionen. Sin video, sin
-  llamadas de conferencia.
+- No se garantiza que las llamadas de emergencia funcionen: un número de
+  emergencia (el 112, o en Chile del 131 al 134 y del 136 al 138) sale como una
+  llamada común a ese número, no como una llamada de emergencia IMS
+  (`urn:service:sos`), y una lista `dial` que no lo incluye lo rechaza. Sin
+  video, sin llamadas de conferencia.
 
 ## Cómo funciona
 

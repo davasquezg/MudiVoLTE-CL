@@ -169,8 +169,9 @@ con `MUDI_VOLTE_UNINSTALL=1`: ya restauró el módem y elimina los datos
 por sí mismo.
 
 `mudi-volte setup` funciona igual en la dirección opuesta. Lee cada valor antes de
-escribirlo (`ims`, `voice_disable`, `ue_usage_setting`, `voice_domain`, y `mode_pref` con
-`--lte-only`) y continúa solo cuando el módem los aceptó todos: sin `voice_domain` 1
+escribirlo (`ims`, `voice_disable`, `ue_usage_setting`, `voice_domain`, `mode_pref` con
+`--lte-only`, y al final `nr5g_disable_mode` 1 con `--no-sa`, que desactiva el 5G SA: `mode_pref`
+LTE:NR5G no lo hace) y continúa solo cuando el módem los aceptó todos: sin `voice_domain` 1
 la red puede mover una llamada a 3G, donde un módem en modo External VoLTE no tiene voz. Cuando el
 módem rechaza un valor o no responde, setup escribe de vuelta los valores que leyó, del más reciente al más antiguo,
 y falla. Desactiva el modo de suspensión del router (3.3), habilita el servicio y reinicia el
@@ -178,6 +179,11 @@ router solo después de que el módem aceptó cada valor, de modo que un setup c
 módem, el servicio y los ajustes de suspensión como estaban. Lo que queda es la cuenta del teléfono y
 el código de país, que setup crea antes de preguntar, y `modem.orig` cuando el módem tampoco
 aceptó de vuelta los valores antiguos: `mudi-volte modem builtin` restaura a partir de él.
+`nr5g_disable_mode` se guarda en `modem.orig` solo con `--no-sa` (un setup fallido vuelve a
+quitar esa línea), y la restauración lo escribe de vuelta solo cuando el archivo lo tiene,
+después de los demás valores. Setup lee el valor de la respuesta
+`+QNWPREFCFG: "nr5g_disable_mode",N`, igual que los demás valores; ese formato aún está por
+verificar en el router, y una respuesta sin dígito detiene el setup como un módem que no responde.
 
 Las páginas web ejecutan setup y la restauración en segundo plano (`--detach`): una solicitud no debe esperar
 ni a un módem que no responde (con sus reintentos, una consulta AT tarda minutos en ese caso)
