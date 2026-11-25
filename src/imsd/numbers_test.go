@@ -107,6 +107,10 @@ func TestNumberPlanValidation(t *testing.T) {
 		func(c *SIPConfig) { c.NationalLen = -1 },
 		func(c *SIPConfig) { c.NationalLen = 9 },
 		func(c *SIPConfig) { c.Emergency = []string{"133=police", "112", "131=ambulance"} },
+		// No emergency list for 44: the echo test may sit on 133.
+		func(c *SIPConfig) { c.DefaultCountry = "44"; c.DialAllow = []string{"+44"}; c.EchoExt = "133" },
+		// An explicit list replaces the country's: 133 is free for the echo test.
+		func(c *SIPConfig) { c.Emergency = []string{"112"}; c.EchoExt = "133" },
 	}
 	for i, f := range good {
 		c := base
@@ -126,6 +130,10 @@ func TestNumberPlanValidation(t *testing.T) {
 		func(c *SIPConfig) { c.Emergency = []string{"133="} },
 		func(c *SIPConfig) { c.Emergency = []string{"600"} }, // the echo test
 		func(c *SIPConfig) { c.Emergency = []string{"201"} }, // a phone
+		// The country's default list is checked too: a login or the echo
+		// test on 133 would keep the call inside the home.
+		func(c *SIPConfig) { c.EchoExt = "133" },
+		func(c *SIPConfig) { c.Accounts = []SIPAccount{{User: "133", Password: testPass}} },
 	}
 	for i, f := range bad {
 		c := base
@@ -166,6 +174,9 @@ func TestNumberAllowedChile(t *testing.T) {
 		{"no plan, 8 digits", []string{"+56912345678"}, "12345678", numberPlan{}, false},
 		// The UK reads a trunk 0 on either side.
 		{"UK, caller national", []string{"+447700900123"}, "07700900123", SIPConfig{DefaultCountry: "44"}.plan(), true},
+		// With a country only the normalised forms are compared: a caller ID
+		// without its trunk 0 is not the end of the entry any more.
+		{"UK, caller without trunk 0", []string{"+447700900123"}, "700900123", SIPConfig{DefaultCountry: "44"}.plan(), false},
 	}
 	for _, tc := range cases {
 		if got := numberAllowed(tc.allow, tc.from, tc.plan); got != tc.want {

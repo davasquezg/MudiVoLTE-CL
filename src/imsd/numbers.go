@@ -36,7 +36,8 @@ var countryNationalLen = map[string]int{"56": 9}
 // (ambulance), 132 Bomberos (fire), 133 Carabineros and 134 PDI (police), 136
 // Socorro Andino (mountain rescue), 137 maritime search and rescue (marine),
 // 138 air rescue (no RFC 5031 service of its own: plain sos), and 112 and 911,
-// which mobile networks send on to 133. Information and help lines (139, 147,
+// which according to that article mobile networks redirect to 133 (its source
+// not verified; to verify with the operator). Information and help lines (139, 147,
 // 149…) are not emergencies (RFC 5031: sos is not meant for public information
 // or counselling) and follow 'dial' like any short number.
 var countryEmergency = map[string][]string{

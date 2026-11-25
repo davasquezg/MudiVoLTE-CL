@@ -578,8 +578,9 @@ func handleIncomingCall(c imsCall, fromNumber string, cfg *Config, logger *slog.
 // "995555123456" match "+995555123456". Both sides are first read with the
 // number plan (numbers.go), so a caller ID in national form matches an entry
 // in E.164 and back: in Chile "912345678" matches "+56912345678". Without a
-// plan that knows the national form, a caller ID of at least
-// minReverseSuffix digits also matches the end of a longer entry. Short allow
+// country (no plan to read the national form with), a caller ID of at least
+// minReverseSuffix digits also matches the end of a longer entry; with one,
+// only the normalised forms are compared. Short allow
 // entries (<7 digits) need an exact match, otherwise "456" would match too
 // much. An empty allow means reject everyone (the safe default), and so does
 // a hidden caller (no digits).
@@ -589,13 +590,14 @@ func numberAllowed(allow []string, from string, p numberPlan) bool {
 	if f == "" || len(allow) == 0 {
 		return false
 	}
+	reverse := p.country == "" && len(f) >= minReverseSuffix
 	for _, a := range allow {
 		ad := e164Digits(a, p)
 		if ad == "" {
 			continue
 		}
 		if len(ad) >= 7 {
-			if strings.HasSuffix(f, ad) || (len(f) >= minReverseSuffix && strings.HasSuffix(ad, f)) {
+			if strings.HasSuffix(f, ad) || (reverse && strings.HasSuffix(ad, f)) {
 				return true
 			}
 		} else if f == ad {

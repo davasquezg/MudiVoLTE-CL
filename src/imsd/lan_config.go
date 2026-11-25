@@ -213,9 +213,15 @@ func (c SIPConfig) validate() error {
 	case c.NationalLen > 0 && (c.NationalLen < 4 || len(c.DefaultCountry)+c.NationalLen > 15):
 		return fmt.Errorf("sip.national_len %d: 4 digits or more, and at most 15 with the country code", c.NationalLen)
 	}
-	for _, e := range c.Emergency {
+	// The effective list: the explicit one or the country's, so that neither
+	// can be taken by a phone or the echo test.
+	emergency, field := c.Emergency, "sip.emergency"
+	if len(emergency) == 0 {
+		emergency, field = countryEmergency[c.DefaultCountry], "emergency number of country "+c.DefaultCountry
+	}
+	for _, e := range emergency {
 		if err := validEmergency(strings.TrimSpace(e), c); err != nil {
-			return fmt.Errorf("sip.emergency: %v", err)
+			return fmt.Errorf("%s: %v", field, err)
 		}
 	}
 	return nil
@@ -223,8 +229,9 @@ func (c SIPConfig) validate() error {
 
 // validEmergency checks an emergency number entry: 2–8 digits, optionally
 // "=kind" with an RFC 5031 sub-service (police, fire, ambulance…: lower-case
-// letters and "-"); it must not be a phone's short number or the echo test,
-// which would keep the call inside the home.
+// letters and "-"); it must not be a phone's short number or login or the
+// echo test, which would keep the call inside the home (lan_server.go routes
+// those first).
 func validEmergency(e string, c SIPConfig) error {
 	num, kind, hasKind := strings.Cut(e, "=")
 	if len(num) < 2 || len(num) > 8 || digitsOnly(num) != num {
@@ -239,6 +246,9 @@ func validEmergency(e string, c SIPConfig) error {
 	for _, a := range c.Accounts {
 		if a.Ext == num {
 			return fmt.Errorf("%q is the short number of phone %q", e, a.User)
+		}
+		if a.User == num {
+			return fmt.Errorf("%q is the login of a phone", e)
 		}
 	}
 	return nil
