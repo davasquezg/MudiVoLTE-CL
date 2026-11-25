@@ -69,6 +69,19 @@ su panel web.
 wget -qO- https://github.com/xarvel/MudiVoLTE/releases/latest/download/install.sh | sh
 ```
 
+**En español.** Si la versión publicada trae el paquete de traducción
+(`mudi-volte-i18n-es_<versión>_all.ipk` en la página de versiones), agrega
+`MUDI_VOLTE_LANG=es` antes de `sh`: el instalador también instala ese paquete y
+la configuración, la línea de comandos y la página del panel de administración
+de GL quedan en español:
+
+```sh
+wget -qO- https://github.com/xarvel/MudiVoLTE/releases/latest/download/install.sh | MUDI_VOLTE_LANG=es sh
+```
+
+LuCI y la pantalla del router siguen su propio ajuste de idioma. Detalles en
+[package/README.es.md](package/README.es.md#idiomas).
+
 El instalador comprueba que el router sea un Mudi 7, descarga el paquete,
 verifica su checksum, lo instala e inicia la configuración. La configuración
 revisa el módem y la SIM, crea una cuenta de teléfono llamada `phone` y

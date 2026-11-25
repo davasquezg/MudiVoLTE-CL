@@ -32,6 +32,7 @@ shellcheck -s sh package/install.sh.in package/build.sh package/control/* \
 sh package/tests/run.sh      # the GL admin panel and LuCI pages (needs node and npm)
 luac5.1 -p package/files/usr/lib/oui-httpd/rpc/mudi-volte \
     package/files/usr/share/gl-validator.d/mudi-volte.lua   # the router runs Lua 5.1
+python3 package/toolchain/i18n.py extract && python3 package/toolchain/i18n.py check
 ```
 
 The Go tests run on Linux and macOS; the few that need Linux (the data call
@@ -63,6 +64,35 @@ well; say in the pull request what you tried it on.
   `docs/PROTOCOLS.md` is the public account of the live network.
 - A change in behaviour comes with a test where the suites allow it
   (`src/imsd/*_test.go` play the phones and the network over 127.0.0.1).
+
+## Translations
+
+The interfaces are written in English and translated through catalogs
+(see "Languages" in [package/README.md](package/README.md)). A text the user
+sees goes through the marker of its file: `_('...')` in the LuCI page,
+`T('...')` (or `NT('...')` in a table, then `T()` where it is shown) in the GL
+admin panel page, `T("...", ...)` in the RPC module, `T '...' ARG...` in
+`mudi-volte`. The text is one quoted literal, one line, a printf format
+(`%s`, `%d`, `%%`) with whole sentences; no newline, tab or backslash. Output
+that scripts read stays untranslated.
+
+After changing texts:
+
+```sh
+python3 package/toolchain/i18n.py extract   # sources → package/po/templates/mudi-volte.pot
+python3 package/toolchain/i18n.py update    # .pot → package/po/<lang>/mudi-volte.po
+python3 package/toolchain/i18n.py check     # every text translated, placeholders match
+```
+
+A new language: copy the header of `package/po/es/mudi-volte.po` into
+`package/po/<lang>/mudi-volte.po`, run `update`, fill in every `msgstr`, and
+add `package/po/<lang>/mudi-screen-volte.tsv` for the screen app (MudiScreen's
+format: `English<TAB>translation`, `{}` matches any text; the English texts
+are the ones `app.sh` prints). `package/build.sh` then makes
+`mudi-volte-i18n-<lang>`; give the language its English name in the `case` of
+`build.sh`. The documents have Spanish versions next to them (`*.es.md`): a
+change to a document should change its translation too, or say in the pull
+request that it is still to be done.
 
 ## Licence of contributions
 

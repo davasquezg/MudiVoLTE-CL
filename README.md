@@ -65,6 +65,11 @@ The password is the router's admin password, the one you use for its web panel.
 wget -qO- https://github.com/xarvel/MudiVoLTE/releases/latest/download/install.sh | sh
 ```
 
+In another language, when the release has its translation package
+(`mudi-volte-i18n-<lang>_<version>_all.ipk`), add `MUDI_VOLTE_LANG=<lang>`
+before `sh`, e.g. `| MUDI_VOLTE_LANG=es sh` for Spanish (see
+[Languages](package/README.md#languages)).
+
 The installer checks that the router is a Mudi 7, downloads the package, checks
 its checksum, installs it and starts the setup. The setup checks the modem and
 the SIM, creates a phone account named `phone` and asks:

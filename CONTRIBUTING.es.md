@@ -32,6 +32,7 @@ shellcheck -s sh package/install.sh.in package/build.sh package/control/* \
 sh package/tests/run.sh      # el panel de administración de GL y las páginas de LuCI (requiere node y npm)
 luac5.1 -p package/files/usr/lib/oui-httpd/rpc/mudi-volte \
     package/files/usr/share/gl-validator.d/mudi-volte.lua   # el router ejecuta Lua 5.1
+python3 package/toolchain/i18n.py extract && python3 package/toolchain/i18n.py check
 ```
 
 Las pruebas de Go corren en Linux y macOS; las pocas que requieren Linux (la llamada de datos
@@ -63,6 +64,36 @@ indica en el pull request en qué lo probaste.
   `docs/PROTOCOLS.md` es la descripción pública de la red real.
 - Un cambio de comportamiento viene acompañado de una prueba donde las suites lo permitan
   (`src/imsd/*_test.go` simulan los teléfonos y la red sobre 127.0.0.1).
+
+## Traducciones
+
+Las interfaces se escriben en inglés y se traducen mediante catálogos (ver
+"Idiomas" en [package/README.es.md](package/README.es.md)). Un texto que ve el
+usuario pasa por el marcador de su archivo: `_('...')` en la página de LuCI,
+`T('...')` (o `NT('...')` en una tabla, y luego `T()` donde se muestra) en la
+página del panel de administración de GL, `T("...", ...)` en el módulo RPC,
+`T '...' ARG...` en `mudi-volte`. El texto es un solo literal entre comillas, de
+una línea, un formato de printf (`%s`, `%d`, `%%`) con oraciones completas; sin
+saltos de línea, tabuladores ni barras invertidas. La salida que leen los
+scripts no se traduce.
+
+Después de cambiar textos:
+
+```sh
+python3 package/toolchain/i18n.py extract   # código → package/po/templates/mudi-volte.pot
+python3 package/toolchain/i18n.py update    # .pot → package/po/<idioma>/mudi-volte.po
+python3 package/toolchain/i18n.py check     # todo traducido, marcadores coinciden
+```
+
+Un idioma nuevo: copia la cabecera de `package/po/es/mudi-volte.po` en
+`package/po/<idioma>/mudi-volte.po`, ejecuta `update`, completa cada `msgstr` y
+agrega `package/po/<idioma>/mudi-screen-volte.tsv` para la app de pantalla
+(formato de MudiScreen: `inglés<TAB>traducción`, `{}` coincide con cualquier
+texto; los textos en inglés son los que imprime `app.sh`). Luego
+`package/build.sh` genera `mudi-volte-i18n-<idioma>`; agrega el nombre en inglés
+del idioma en el `case` de `build.sh`. Los documentos tienen su versión en
+español al lado (`*.es.md`): un cambio en un documento debería cambiar también
+su traducción, o indicar en el pull request que queda pendiente.
 
 ## Licencia de las contribuciones
 
