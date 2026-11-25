@@ -1,0 +1,14 @@
+Package: mudi-volte-i18n-@LANG@
+Version: @VERSION@-1
+Depends: mudi-volte
+Provides: luci-i18n-mudi-volte-@LANG@
+Source: MudiVoLTE
+License: PolyForm-Noncommercial-1.0.0
+Section: luci
+Architecture: all
+Installed-Size: @SIZE@
+Description: @LANGNAME@ texts for mudi-volte (VoLTE calls on the GL.iNet Mudi 7).
+ The LuCI page, the page in the GL admin panel, the command line tool with its
+ setup, and the app on the router's screen (MudiScreen) in @LANGNAME@. The
+ first install sets mudi-volte.main.lang to @LANG@ unless a language is set;
+ LuCI and MudiScreen follow their own language settings.

@@ -66,6 +66,7 @@ jobs:
           shellcheck -s sh -S warning -e SC3043,SC2034,SC1007 \
             package/install.sh.in package/build.sh \
             package/control/postinst package/control/prerm package/control/postrm \
+            package/control-i18n/postinst package/control-i18n/postrm \
             package/files/usr/sbin/mudi-volte package/files/etc/init.d/mudi-volte \
             package/files/usr/share/mudi-screen/apps/volte/app.sh \
             package/tests/run.sh package/toolchain/*.sh scripts/*.sh
@@ -95,3 +96,18 @@ jobs:
         run: |
           luac5.1 -p package/files/usr/lib/oui-httpd/rpc/mudi-volte \
             package/files/usr/share/gl-validator.d/mudi-volte.lua
+
+  i18n:
+    name: Translations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The template matches the sources, every catalog is complete
+        run: |
+          python3 package/toolchain/i18n.py extract
+          git diff --exit-code package/po/templates/
+          python3 package/toolchain/i18n.py check
+          for d in package/po/*/; do
+            l=$(basename "$d"); [ "$l" = templates ] && continue
+            python3 package/toolchain/i18n.py build "$l" "$RUNNER_TEMP/i18n-$l"
+          done

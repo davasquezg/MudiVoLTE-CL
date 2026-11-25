@@ -1,3 +1,5 @@
+**English** | [Español](THIRD_PARTY.es.md)
+
 # Third-party components in mudi-imsd
 
 `mudi-imsd` is a single statically linked binary (linux/arm64, musl libc).

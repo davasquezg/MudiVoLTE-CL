@@ -1,7 +1,8 @@
 #!/bin/sh
 # Build the mudi-volte release into dist/:
 #   mudi-volte_<version>_aarch64_cortex-a53.ipk   OpenWrt package (opkg / LuCI upload)
-#   install.sh                                   one-line installer for the router
+#   mudi-volte-i18n-<lang>_<version>_all.ipk      translations, one per package/po/<lang>
+#   install.sh                                  one-line installer for the router
 #   SHA256SUMS
 # The daemon comes from scripts/build-static.sh (static musl, AMR-WB linked in),
 # and so does mudi-dsi-helper (dynamic, for the firmware's musl); pass
@@ -95,11 +96,56 @@ touch -d "@$epoch" "$work/debian-binary" "$work/data.tar.gz" "$work/control.tar.
 tar --format=gnu --numeric-owner --owner=0 --group=0 --mtime="@$epoch" -C "$work" \
 	-cf - ./debian-binary ./data.tar.gz ./control.tar.gz | gzip -9n >"$out/$ipk"
 
+# Translation packages: one per catalog in package/po (mudi-volte-i18n-LANG,
+# architecture all), made by package/toolchain/i18n.py; `check` stops the
+# build on an untranslated text or a placeholder that does not match.
+i18n_ipks=
+for po in "$pkg"/po/*/mudi-volte.po; do
+	[ -f "$po" ] || continue
+	lang=$(basename "$(dirname "$po")")
+	case "$lang" in
+	es) langname=Spanish ;;
+	*) langname=$lang ;;
+	esac
+	python3 "$pkg/toolchain/i18n.py" check "$lang" >/dev/null
+	iwork=$work/i18n-$lang
+	rm -rf "$iwork"
+	mkdir -p "$iwork/data" "$iwork/control"
+	python3 "$pkg/toolchain/i18n.py" build "$lang" "$iwork/data" >/dev/null
+	for f in LICENSE NOTICE; do
+		install -D -m 0644 "$root/$f" "$iwork/data/usr/share/doc/mudi-volte-i18n-$lang/$f"
+	done
+	find "$iwork/data" -type d -exec chmod 0755 {} +
+	find "$iwork/data" -type f -exec chmod 0644 {} +
+	isize=$(du -sk "$iwork/data" | cut -f1)
+	sed -e "s/@VERSION@/$ver/" -e "s/@SIZE@/$((isize * 1024))/" -e "s/@LANG@/$lang/g" \
+		-e "s/@LANGNAME@/$langname/g" "$pkg/control-i18n/control.in" >"$iwork/control/control"
+	for f in postinst postrm; do
+		sed "s/@LANG@/$lang/g" "$pkg/control-i18n/$f" >"$iwork/control/$f"
+	done
+	chmod 0644 "$iwork/control/control"
+	chmod 0755 "$iwork/control/postinst" "$iwork/control/postrm"
+	mktar "$iwork/data" >"$iwork/data.tar.gz"
+	mktar "$iwork/control" >"$iwork/control.tar.gz"
+	echo 2.0 >"$iwork/debian-binary"
+	touch -d "@$epoch" "$iwork/debian-binary" "$iwork/data.tar.gz" "$iwork/control.tar.gz"
+	iipk=mudi-volte-i18n-${lang}_${ver}_all.ipk
+	tar --format=gnu --numeric-owner --owner=0 --group=0 --mtime="@$epoch" -C "$iwork" \
+		-cf - ./debian-binary ./data.tar.gz ./control.tar.gz | gzip -9n >"$out/$iipk"
+	i18n_ipks="$i18n_ipks $iipk"
+done
 sum=$(sha256sum "$out/$ipk" | cut -d' ' -f1)
-sed -e "s|@VERSION@|$ver|g" -e "s|@BASE_URL@|$base_url|g" -e "s|@SHA256@|$sum|g" \
+i18n_sums=
+for f in $i18n_ipks; do
+	l=${f#mudi-volte-i18n-}
+	i18n_sums="$i18n_sums ${l%%_*}:$(sha256sum "$out/$f" | cut -d' ' -f1)"
+done
+i18n_sums=${i18n_sums# }
+sed -e "s|@VERSION@|$ver|g" -e "s|@BASE_URL@|$base_url|g" -e "s|@SHA256@|$sum|g" -e "s|@I18N_SUMS@|$i18n_sums|g" \
 	"$pkg/install.sh.in" >"$out/install.sh"
 chmod 0755 "$out/install.sh"
-(cd "$out" && sha256sum "$ipk" install.sh >SHA256SUMS)
+# shellcheck disable=SC2086 # the list of translation packages splits on spaces
+(cd "$out" && sha256sum "$ipk" $i18n_ipks install.sh >SHA256SUMS)
 
 echo "== $out"
 ls -la "$out"

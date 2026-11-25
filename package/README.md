@@ -1,3 +1,5 @@
+**English** | [Español](README.es.md)
+
 # mudi-volte package reference
 
 This directory builds the OpenWrt package `mudi-volte`. Installation and
@@ -55,6 +57,28 @@ pushes to sleeping phones (`push_login`, `push_password`; `push_url` and `push_d
 only for another FlexiAPI server than subscribe.linphone.org) and the log level.
 The web pages edit the same file. After `uci commit mudi-volte` run
 `mudi-volte restart`.
+
+## Languages
+
+The texts are English. A translation package, `mudi-volte-i18n-<lang>` (for
+now `mudi-volte-i18n-es`, Spanish; architecture `all`, it also provides
+`luci-i18n-mudi-volte-<lang>`), translates:
+
+| Where | Language it follows |
+|---|---|
+| Command line tool and setup | `mudi-volte.main.lang` |
+| Page in the GL admin panel and its error messages | `mudi-volte.main.lang`; unset: the panel's language, else the browser's |
+| Page in LuCI | LuCI's language (System > System > Language) |
+| App on the router's screen (MudiScreen) | The screen's language (Settings > Language) |
+
+The first install of a translation package sets `mudi-volte.main.lang` to its
+language unless one is set; its removal unsets it. Back to English with
+`uci set mudi-volte.main.lang=en; uci commit mudi-volte`. The installer installs
+one with the setup: `wget -qO- .../install.sh | MUDI_VOLTE_LANG=es sh`; with the
+packages copied to the router, `opkg install mudi-volte-i18n-es_*_all.ipk`
+after the main one. Output that scripts read (`version`, `--json`,
+`phone url`, `phone list`) and the service log stay English. To add a
+language, see [CONTRIBUTING.md](../CONTRIBUTING.md#translations).
 
 ## SMS on the phones
 
@@ -219,10 +243,12 @@ correction does not move.
 | Path | What it is |
 |---|---|
 | `VERSION` | Package version |
-| `build.sh` | Builds `dist/`: the `.ipk`, `install.sh` and `SHA256SUMS`, from `build/static/mudi-imsd` (made by `scripts/build-static.sh`). `MUDI_VOLTE_BASE_URL` sets where `install.sh` downloads the package from |
-| `install.sh.in` | The installer; `build.sh` fills in the version, the download address and the checksum |
+| `build.sh` | Builds `dist/`: the `.ipk`, one translation `.ipk` per catalog in `po/`, `install.sh` and `SHA256SUMS`, from `build/static/mudi-imsd` (made by `scripts/build-static.sh`). `MUDI_VOLTE_BASE_URL` sets where `install.sh` downloads the packages from |
+| `install.sh.in` | The installer; `build.sh` fills in the version, the download address and the checksums |
 | `control/` | opkg control files: package metadata and maintainer scripts |
+| `control-i18n/` | The same for the translation packages (`@LANG@` is filled in per language) |
+| `po/` | Translations: `templates/mudi-volte.pot` (made from the sources), `<lang>/mudi-volte.po`, and `<lang>/mudi-screen-volte.tsv` for the screen app (MudiScreen's catalog format) |
 | `files/` | Everything installed on the router except the binary and the license files; `build.sh` gzips `www/views/` as the GL admin panel expects |
 | `tests/` | `run.sh`: the GL admin panel page with Vue 2 in node, and the LuCI page with LuCI's modules as stubs (needs node and npm) |
-| `toolchain/` | musl toolchain and AMR-WB libraries for the static build, and the license collector |
+| `toolchain/` | musl toolchain and AMR-WB libraries for the static build, the license collector, and `i18n.py` (extract, update, check and build the translations) |
 | `THIRD_PARTY.md`, `licenses/` | Third-party components inside `mudi-imsd` and their license texts |
