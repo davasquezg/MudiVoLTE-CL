@@ -78,8 +78,10 @@ before `sh`, e.g. `| MUDI_VOLTE_LANG=es sh` for Spanish (see
 [Languages](package/README.md#languages)).
 
 > **Needs a release of this fork.** The Spanish package comes only with the
-> fork's releases (upstream's have none, and with them the installer stops
-> with *"no translation for language es in this release"*). Until the fork
+> fork's releases. Upstream's releases have no translation package, and
+> their installer ignores `MUDI_VOLTE_LANG` and installs in English; a fork
+> release without the requested catalog stops with *"no translation for
+> language es in this release"*. Until the fork
 > publishes its first release on its
 > [releases page](https://github.com/davasquezg/MudiVoLTE-CL/releases), the
 > commands above find no `install.sh`; till then, build the package yourself

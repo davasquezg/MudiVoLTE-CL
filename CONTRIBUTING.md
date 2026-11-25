@@ -54,7 +54,10 @@ well; say in the pull request what you tried it on.
 On Windows (Git Bash) part of this runs too:
 
 - Go: `volte/auth`, `volte/media`, `volte/media/g722` and `volte/srtp` test
-  natively; the rest of `volte` and the daemon build only for Linux.
+  natively. `volte/ipsec` builds on Windows too, but two of its tests
+  (`TestRemoveOwnedThroughIP*`) fail there because they run a stub `ip`
+  shell script; the rest of `volte` and the daemon build only for Linux, so
+  run `go test ./auth/ ./media/... ./srtp/` rather than `go test ./...`.
   `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go vet ./...` in `volte/` and
   `src/imsd/` type-checks them; their tests run in CI (or on a Linux host).
 - `lifecycle.test.py` runs with the Windows Python

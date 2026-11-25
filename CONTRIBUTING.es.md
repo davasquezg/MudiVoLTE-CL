@@ -54,8 +54,11 @@ indica en el pull request en qué lo probaste.
 En Windows (Git Bash) también corre una parte de esto:
 
 - Go: `volte/auth`, `volte/media`, `volte/media/g722` y `volte/srtp` se
-  prueban de forma nativa; el resto de `volte` y el daemon solo compilan para
-  Linux. `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go vet ./...` en `volte/` y
+  prueban de forma nativa. `volte/ipsec` también compila en Windows, pero dos
+  de sus pruebas (`TestRemoveOwnedThroughIP*`) fallan ahí porque ejecutan un
+  script `ip` de reemplazo; el resto de `volte` y el daemon solo compilan para
+  Linux, así que corre `go test ./auth/ ./media/... ./srtp/` en vez de
+  `go test ./...`. `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go vet ./...` en `volte/` y
   `src/imsd/` revisa sus tipos; sus pruebas corren en el CI (o en un equipo
   con Linux).
 - `lifecycle.test.py` corre con el Python de Windows

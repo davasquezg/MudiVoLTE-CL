@@ -91,9 +91,11 @@ LuCI y la pantalla del router siguen su propio ajuste de idioma. Detalles en
 [package/README.es.md](package/README.es.md#idiomas).
 
 > **Requiere una versión publicada de este fork.** El paquete en español solo
-> viene en las versiones del fork (las del proyecto original no lo traen, y
-> con ellas el instalador termina con *"no translation for language es in
-> this release"*). Mientras el fork no publique su primera versión en su
+> viene en las versiones del fork. Las del proyecto original no traen
+> paquetes de traducción, y su instalador ignora `MUDI_VOLTE_LANG` e instala
+> en inglés; una versión del fork sin el catálogo pedido termina con *"no
+> translation for language es in this release"*. Mientras el fork no publique
+> su primera versión en su
 > [página de versiones](https://github.com/davasquezg/MudiVoLTE-CL/releases),
 > los comandos de arriba no encuentran el `install.sh`; hasta entonces, el
 > paquete se puede construir a mano (ver [Compilar desde el código fuente](#compilar-desde-el-código-fuente)).
