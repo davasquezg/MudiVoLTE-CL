@@ -54,7 +54,10 @@ codecs, ring time, the echo test number, SMS on the phones (`sms`), the SIP
 port, the QR setup port, encryption (`encryption`, `tls_port`, and `plain`:
 whether UDP and TCP stay open next to TLS), the account for
 pushes to sleeping phones (`push_login`, `push_password`; `push_url` and `push_domain`
-only for another FlexiAPI server than subscribe.linphone.org) and the log level.
+only for another FlexiAPI server than subscribe.linphone.org), the log level and
+the SIM of the line (`sim_slot`: 1, or 2 for slot 2 and the built-in eSIM; setup
+picks the first slot with a ready SIM and writes it; every AT command, the IMS
+data call and the SMS spool use its subscription).
 The web pages edit the same file. After `uci commit mudi-volte` run
 `mudi-volte restart`.
 

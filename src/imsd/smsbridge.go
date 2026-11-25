@@ -40,7 +40,7 @@ type SMSConfig struct {
 	Sent      string `json:"sent"`
 	Failed    string `json:"failed"`
 	Bus       string `json:"bus"`        // the modem smsd sends through, as for GL's sendsms: "cpu"
-	Slot      int    `json:"slot"`       // the SIM slot: 1
+	Slot      int    `json:"slot"`       // the SIM slot smsd sends from; 0 = the line's (imsSlot)
 	StateFile string `json:"state_file"` // who still waits for which SMS
 }
 
@@ -61,7 +61,7 @@ func (c SMSConfig) withDefaults() SMSConfig {
 		c.Bus = "cpu"
 	}
 	if c.Slot == 0 {
-		c.Slot = 1
+		c.Slot = imsSlot
 	}
 	if c.StateFile == "" {
 		c.StateFile = "/etc/mudi-volte/sms-phones.json"

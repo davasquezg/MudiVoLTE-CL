@@ -33,11 +33,13 @@ call answered on an iPhone woken by a push.
 ## What you need
 
 - A GL.iNet Mudi 7 (GL-E5800) with GL firmware 4.x.
-- A SIM in slot 1 from an operator that offers VoLTE on it. Tested with one
-  European operator. Others should work if they allow VoLTE for the SIM; please
-  open an issue and tell how it went. A second SIM or the built-in eSIM can stay
-  in the router, but the phone line is always the SIM in slot 1 (see
-  [Known limitations](#known-limitations)).
+- A SIM from an operator that offers VoLTE on it: the nano-SIM in slot 1, or
+  slot 2 or the built-in eSIM (which takes the place of SIM 2). Setup picks the
+  first slot with a ready SIM, slot 1 first; `mudi-volte.main.sim_slot` chooses
+  another. Tested with one European operator on SIM 1; the line on SIM 2 or the
+  eSIM is not tested on a router yet. Others should work if they allow VoLTE for
+  the SIM; please open an issue and tell how it went. The other SIM can stay in
+  the router (see [Known limitations](#known-limitations)).
 - A phone, tablet or computer with Linphone (free: Android, iPhone, macOS,
   Windows, Linux).
 - Optionally: a free account at
@@ -187,7 +189,7 @@ that checks the chat without the mobile network.
 
 - A phone that is not connected gets the SMS when it connects again (within 7
   days). The SMS that were on the router before MudiVoLTE stay there.
-- Only SMS to the SIM in slot 1 go to the phones. What a second SIM receives
+- Only SMS to the SIM of the line go to the phones. What a second SIM receives
   stays on the SMS page of the GL admin panel.
 - Linphone marks a message as sent when the modem has sent the SMS, and as
   failed when it could not. If sending takes longer than 20 seconds, the
@@ -443,9 +445,11 @@ relay, with more delay.
 
 - One call at a time, a call between phones included. A second incoming call
   gets "busy".
-- One phone line: the SIM in slot 1. A second SIM or the eSIM can be active at
-  the same time, but its calls do not reach the phones. Keep the internet on
-  SIM 1: if you move it to the other SIM (SIM Card Switch in the GL admin
+- One phone line: the SIM of `sim_slot` (1, or 2 for slot 2 or the eSIM). The
+  other SIM can be active at the same time, but its calls do not reach the
+  phones. To move the line to the other SIM: `mudi-volte modem builtin`, then
+  `uci set mudi-volte.main.sim_slot=2; uci commit mudi-volte` and
+  `mudi-volte setup`. Keep the internet on the SIM of the line: if you move it to the other SIM (SIM Card Switch in the GL admin
   panel), the line stays up but calls get short dropouts (in a test, 0.25-0.4 s
   about every 2.4 s), probably because the modem shares its radio between the
   SIMs. Automatic switching (SIM Failover) has not been tested.

@@ -891,5 +891,105 @@ class FirmwareUpdate(unittest.TestCase):
             self.assertEqual(p, p.strip())  # the update script tests the path as written
 
 
+# The GL AT proxy with two subscriptions: READY lists the slots whose SIM is
+# ready, ESIM=1 makes slot 2 the built-in eSIM. The reply names the
+# subscription the line selected, as the modem does.
+SIM_STUBS = r'''
+DATA=$SB/data
+ORIG=$DATA/modem.orig
+sleep() { :; }
+uci() {
+ echo "uci $*" >>"$SB/events"
+ case "$*" in
+ *get*mudi-volte.main.sim_slot*) cat "$SB/sim_slot" 2>/dev/null ;;
+ esac
+}
+ubus() {
+ json=$4
+ echo "$json" >>"$SB/ubus"
+ cmd=$(printf '%s' "$json" | sed -n 's/^{"cmd":"\(.*\)","timeout":12,"sub_id":[0-9]*}$/\1/p' | sed 's/\\"/"/g')
+ # A line with AT+QUIMSUB=N selects N; a bare command runs in the last one.
+ sub=$(printf '%s' "$cmd" | sed -n 's/^AT+QUIMSUB=\([12]\)\(;.*\)*$/\1/p')
+ if [ -n "$sub" ]; then echo "$sub" >"$SB/cursub"; else sub=$(cat "$SB/cursub" 2>/dev/null); fi
+ case "$cmd" in
+ *CPIN?*)
+  case " ${READY:-} " in
+  *" $sub "*) data="+QUIMSUB: $sub,\"SUB$sub\"\n+CPIN: READY\n\nOK" ;;
+  *) data="+QUIMSUB: $sub,\"SUB$sub\"\n+CME ERROR: 10" ;;
+  esac ;;
+ *QSIMTYPE*) data="+QUIMSUB: $sub,\"SUB$sub\"\n+QSIMTYPE: \"slot2\",${ESIM:-0}\n\nOK" ;;
+ *) data="+QUIMSUB: $sub,\"SUB$sub\"\n\nOK" ;;
+ esac
+ printf '{"data":"%s"}\n' "$data"
+}
+jsonfilter() { sed -n 's/^{"data":"\(.*\)"}$/\1/p' | sed 's/\\n/\n/g; s/\\"/"/g'; }
+'''
+
+
+class SimSlot(unittest.TestCase):
+    """pick_sim and the AT primitives with the line on SIM 1, SIM 2 or the eSIM."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="mudi-sim-")
+        self.addCleanup(self.tmp.cleanup)
+        self.sb = Path(self.tmp.name)
+        (self.sb / "data").mkdir()
+        self.base = SOURCE + "\n" + SIM_STUBS
+
+    def run_case(self, command, **env):
+        p = self.sb / "case.sh"
+        p.write_text(self.base + "\n" + command + "\n", newline="\n")
+        return subprocess.run(SHELL + [str(p)], env={**os.environ, "SB": str(self.sb), **env},
+                              text=True, capture_output=True, timeout=20)
+
+    def lines(self):
+        p = self.sb / "ubus"
+        return p.read_text().splitlines() if p.exists() else []
+
+    def test_slot_1_first(self):
+        r = self.run_case('pick_sim; echo "slot $SIM"', READY="1 2")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("slot 1", r.stdout)
+
+    def test_esim_alone_is_picked_and_every_line_selects_it(self):
+        r = self.run_case('pick_sim; echo "slot $SIM"; sim_label; echo; at_set \'AT+QCFG="ims",2\'',
+                          READY="2", ESIM="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("slot 2", r.stdout)
+        self.assertIn("eSIM", r.stdout)
+        after = self.lines()[next(i for i, l in enumerate(self.lines()) if 'QUIMSUB=2' in l):]
+        self.assertTrue(after)
+        for l in after:
+            self.assertIn('"sub_id":2', l)
+            self.assertIn("QUIMSUB=2", l)
+        self.assertTrue(any('QCFG=\\"ims\\",2' in l for l in after), after)
+
+    def test_slot_set_in_the_config_is_kept(self):
+        (self.sb / "sim_slot").write_text("2\n")
+        r = self.run_case('pick_sim; echo "slot $SIM"', READY="1 2")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("slot 2", r.stdout)
+        self.assertFalse(any("QUIMSUB=1" in l for l in self.lines()))
+
+    def test_configured_slot_without_a_ready_sim_fails(self):
+        (self.sb / "sim_slot").write_text("2\n")
+        r = self.run_case('pick_sim; echo "slot $SIM"', READY="1")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("no SIM ready in slot 2", r.stderr)
+
+    def test_earlier_setup_stays_on_slot_1(self):
+        # Installed before the slot became a setting: the modem was switched
+        # in SUB1, and a restore has to go there too.
+        (self.sb / "data/modem.orig").write_text("ims=1\n")
+        r = self.run_case('pick_sim; echo "slot $SIM"', READY="1 2")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("slot 1", r.stdout)
+
+    def test_no_ready_sim(self):
+        r = self.run_case('pick_sim', READY="")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("no SIM ready in slot 1 or slot 2", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

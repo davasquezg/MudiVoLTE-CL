@@ -36,11 +36,14 @@ despertado por una notificación push.
 ## Lo que necesitas
 
 - Un GL.iNet Mudi 7 (GL-E5800) con firmware GL 4.x.
-- Una SIM en la ranura 1 de un operador que ofrezca VoLTE para ella. Probado con
-  un operador europeo. Otros deberían funcionar si permiten VoLTE para la SIM;
-  abre un issue y cuenta cómo te fue. Una segunda SIM o la eSIM integrada pueden
-  quedarse en el router, pero la línea telefónica es siempre la SIM de la
-  ranura 1 (ver [Limitaciones conocidas](#limitaciones-conocidas)).
+- Una SIM de un operador que ofrezca VoLTE para ella: la nano-SIM de la ranura
+  1, o la de la ranura 2 o la eSIM integrada (que ocupa el lugar de la SIM 2). La
+  configuración elige la primera ranura con una SIM lista, primero la 1;
+  `mudi-volte.main.sim_slot` elige otra. Probado con un operador europeo en la
+  SIM 1; la línea en la SIM 2 o en la eSIM aún no se ha probado en un router.
+  Otros operadores deberían funcionar si permiten VoLTE para la SIM; abre un
+  issue y cuenta cómo te fue. La otra SIM puede quedarse en el router (ver
+  [Limitaciones conocidas](#limitaciones-conocidas)).
 - Un teléfono, tablet o computador con Linphone (gratuito: Android, iPhone,
   macOS, Windows, Linux).
 - Opcionalmente: una cuenta gratuita en
@@ -209,7 +212,7 @@ mensaje al `600` vuelve de inmediato: así se prueba el chat sin la red móvil.
 - Un teléfono que no está conectado recibe el SMS cuando se vuelve a conectar
   (dentro de 7 días). Los SMS que estaban en el router antes de MudiVoLTE se
   quedan ahí.
-- Solo los SMS a la SIM de la ranura 1 llegan a los teléfonos. Lo que recibe una
+- Solo los SMS a la SIM de la línea llegan a los teléfonos. Lo que recibe una
   segunda SIM se queda en la página SMS del panel de administración de GL.
 - Linphone marca un mensaje como enviado cuando el módem ha enviado el SMS, y
   como fallido cuando no pudo. Si el envío tarda más de 20 segundos, el mensaje
@@ -488,9 +491,12 @@ de redes móviles, puede pasar por un relay, con más retardo.
 
 - Una llamada a la vez, incluida una llamada entre teléfonos. Una segunda
   llamada entrante recibe "ocupado".
-- Una línea telefónica: la SIM de la ranura 1. Una segunda SIM o la eSIM pueden
-  estar activas al mismo tiempo, pero sus llamadas no llegan a los teléfonos.
-  Mantén internet en la SIM 1: si lo cambias a la otra SIM (SIM Card Switch en
+- Una línea telefónica: la SIM de `sim_slot` (1, o 2 para la ranura 2 o la
+  eSIM). La otra SIM puede estar activa al mismo tiempo, pero sus llamadas no
+  llegan a los teléfonos. Para pasar la línea a la otra SIM:
+  `mudi-volte modem builtin`, luego
+  `uci set mudi-volte.main.sim_slot=2; uci commit mudi-volte` y
+  `mudi-volte setup`. Mantén internet en la SIM de la línea: si lo cambias a la otra SIM (SIM Card Switch en
   el panel de administración de GL), la línea sigue activa pero las llamadas
   tienen cortes breves (en una prueba, 0,25-0,4 s aproximadamente cada 2,4 s),
   probablemente porque el módem comparte su radio entre las SIM. El cambio
