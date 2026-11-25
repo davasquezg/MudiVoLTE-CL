@@ -246,7 +246,7 @@ corrección no mueve.
 
 | Ruta | Qué es |
 |---|---|
-| `VERSION` | Versión del paquete |
+| `VERSION` | Versión del paquete (el esquema del fork, p. ej. `0.2.0.1`: ver el [registro de cambios](../CHANGELOG.es.md)) |
 | `build.sh` | Construye `dist/`: el `.ipk`, un `.ipk` de traducción por cada catálogo en `po/`, `install.sh` y `SHA256SUMS`, a partir de `build/static/mudi-imsd` (generado por `scripts/build-static.sh`). `MUDI_VOLTE_BASE_URL` define desde dónde descarga los paquetes `install.sh` |
 | `install.sh.in` | El instalador; `build.sh` completa la versión, la dirección de descarga y los checksums |
 | `control/` | Archivos de control de opkg: metadatos del paquete y scripts del mantenedor |

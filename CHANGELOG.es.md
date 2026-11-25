@@ -8,6 +8,35 @@ paquetes y sus checksums están en la
 versiones hasta la 0.2.0 son las del proyecto original,
 [xarvel/MudiVoLTE](https://github.com/xarvel/MudiVoLTE/releases).
 
+El fork numera sus versiones como la versión del original sobre la que se
+construyen más un cuarto número: 0.2.0.1 es la primera versión del fork
+sobre la 0.2.0 del original. Solo dígitos y puntos, así que la misma cadena
+sirve como versión de opkg (`0.2.0.1-1`), en los nombres de archivo, en el
+tag de git (`v0.2.0.1`; git no acepta `~`) y en los nombres de los archivos
+de la versión publicada (GitHub renombra los que tienen caracteres
+especiales). opkg compara las versiones como Debian: 0.2.0.1 es más nueva
+que la 0.2.0 del original y más antigua que una 0.2.1 del original, así que
+una versión del original publicada después es una actualización; la
+versión del fork sobre ella es la 0.2.1.1, de nuevo más nueva.
+
+## 0.2.0.1 (sin publicar)
+
+Primera versión del fork, sobre la 0.2.0 del original. Lo que cambia para
+Chile, y lo que sigue pendiente, está en los
+[issues del fork](https://github.com/davasquezg/MudiVoLTE-CL/issues).
+
+- Español: la documentación, y textos traducibles en la herramienta de línea
+  de comandos y su configuración, la página del panel de administración de
+  GL, la página de LuCI y la app de la pantalla del router. Los textos de un
+  idioma vienen en su propio paquete, `mudi-volte-i18n-<idioma>`
+  (`MUDI_VOLTE_LANG=es` en el instalador); el primero es el español.
+- La línea puede ir en la SIM 2 o en la eSIM integrada, no solo en la SIM 1:
+  la configuración toma la primera ranura con una SIM lista,
+  `mudi-volte.main.sim_slot` elige otra. Aún no se ha probado en un router.
+- El instalador, las versiones publicadas y los reportes de seguridad son
+  los del fork (`davasquezg/MudiVoLTE-CL`); un workflow de publicación
+  construye y publica los paquetes a partir de un tag `v*`.
+
 ## 0.2.0 (2026-11-23)
 
 - La línea telefónica en la pantalla táctil del router: el paquete trae una app para

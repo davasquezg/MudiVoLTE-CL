@@ -1006,5 +1006,63 @@ class SimSlot(unittest.TestCase):
         self.assertIn("no SIM ready in slot 1 or slot 2", r.stderr)
 
 
+def opkg_verrevcmp(val, ref):
+    """opkg's version comparison (libopkg/pkg.c of opkg-lede, from dpkg):
+    '~' before anything, even the end; letters before the other characters;
+    runs of digits compared as numbers."""
+    def order(c):
+        if c == "~":
+            return -1
+        if not c or c.isdigit():
+            return 0
+        if c.isalpha():
+            return ord(c)
+        return ord(c) + 256
+    i = j = 0
+    while i < len(val) or j < len(ref):
+        while (i < len(val) and not val[i].isdigit()) or (j < len(ref) and not ref[j].isdigit()):
+            vc = order(val[i] if i < len(val) else "")
+            rc = order(ref[j] if j < len(ref) else "")
+            if vc != rc:
+                return vc - rc
+            i += 1
+            j += 1
+        m = re.match(r"\d*", val[i:]).group()
+        n = re.match(r"\d*", ref[j:]).group()
+        i += len(m)
+        j += len(n)
+        if int(m or 0) != int(n or 0):
+            return int(m or 0) - int(n or 0)
+    return 0
+
+
+class Version(unittest.TestCase):
+    """The fork's version: the upstream version it builds on plus a fourth
+    number (CHANGELOG.md)."""
+
+    def test_digits_and_dots_only(self):
+        # The same string is the opkg version, part of the file names, the git
+        # tag (no '~') and the release assets' names (GitHub renames special
+        # characters); build.sh puts it into sed replacements and install.sh
+        # into a grep pattern.
+        self.assertRegex(VERSION, r"^\d+\.\d+\.\d+\.\d+$")
+
+    def test_sorts_between_its_upstream_version_and_the_next(self):
+        major, minor, patch, _ = (int(x) for x in VERSION.split("."))
+        upstream = "%d.%d.%d" % (major, minor, patch)
+        self.assertGreater(opkg_verrevcmp(VERSION, upstream), 0)
+        for later in ("%d.%d.%d" % (major, minor, patch + 1), "%d.%d.0" % (major, minor + 1)):
+            self.assertLess(opkg_verrevcmp(VERSION, later), 0, later)
+            # The fork's release on top of a later upstream one is newer again.
+            self.assertGreater(opkg_verrevcmp(later + ".1", later), 0, later)
+
+    def test_comparison_as_opkg(self):
+        self.assertEqual(opkg_verrevcmp("0.2.0", "0.2.0"), 0)
+        self.assertLess(opkg_verrevcmp("0.2.0~cl1", "0.2.0"), 0)  # '~' sorts first
+        self.assertGreater(opkg_verrevcmp("0.2.0+cl1", "0.2.0"), 0)
+        self.assertLess(opkg_verrevcmp("0.2.0.9", "0.2.0.10"), 0)  # numbers, not text
+        self.assertLess(opkg_verrevcmp("0.9", "0.10"), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

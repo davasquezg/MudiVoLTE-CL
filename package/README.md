@@ -245,7 +245,7 @@ correction does not move.
 
 | Path | What it is |
 |---|---|
-| `VERSION` | Package version |
+| `VERSION` | Package version (the fork's scheme, e.g. `0.2.0.1`: see the [changelog](../CHANGELOG.md)) |
 | `build.sh` | Builds `dist/`: the `.ipk`, one translation `.ipk` per catalog in `po/`, `install.sh` and `SHA256SUMS`, from `build/static/mudi-imsd` (made by `scripts/build-static.sh`). `MUDI_VOLTE_BASE_URL` sets where `install.sh` downloads the packages from |
 | `install.sh.in` | The installer; `build.sh` fills in the version, the download address and the checksums |
 | `control/` | opkg control files: package metadata and maintainer scripts |
