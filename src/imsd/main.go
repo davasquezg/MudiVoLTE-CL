@@ -354,16 +354,6 @@ func buildStack(ctx context.Context, cfg *Config, link *ATLink, env pdnEnv, logg
 		logger.Info("IMEI read (15 digits)")
 	}
 
-	ani, err := servingCellANI(ctx, link)
-	if err != nil {
-		return nil, fmt.Errorf("serving cell: %w", err)
-	}
-	// The cell gives away the router's location to within hundreds of metres,
-	// and people attach the log to bug reports: at info level only the network
-	// (PLMN).
-	logger.Info("P-Access-Network-Info", "ani", maskANI(ani))
-	logger.Debug("P-Access-Network-Info", "ani_full", ani)
-
 	// SIM: IMSI/MCC/MNC, ISIM identities, SMSC, AKA keys. The card's logger is
 	// muted: it writes the identities at debug level.
 	reader, err := sim.NewReader(newCSIMTransmitter(link))
@@ -388,6 +378,21 @@ func buildStack(ctx context.Context, cfg *Config, link *ATLink, env pdnEnv, logg
 		return nil, err
 	}
 	logger.Info("IMS domain", "domain", ids.Domain, "smsc_on_sim", card.SMSC() != "", "rtp_iface", iface)
+
+	// After the SIM: it gives the length of the MNC for the cell ID (#12). A
+	// cell that cannot be read does not stop the line (#7): see resolveANI.
+	ani, err := servingCellANI(ctx, link, card.MCC(), len(card.MNC()))
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("serving cell: %w", ctx.Err())
+	}
+	ani = resolveANI(ani, err, logger)
+	if ani != "" {
+		// The cell gives away the router's location to within hundreds of
+		// metres, and people attach the log to bug reports: at info level only
+		// the network (PLMN).
+		logger.Info("P-Access-Network-Info", "ani", maskANI(ani))
+		logger.Debug("P-Access-Network-Info", "ani_full", ani)
+	}
 
 	return newNetStack(iface, regConfig(cfg, ids, imei, ue, pcscf, ani, logger), cardAuth{card},
 		callConfig(cfg, ani, logger), smsConfig(cfg, ids, card.SMSC(), logger), logger)
@@ -620,18 +625,22 @@ func maskNumber(s string) string {
 
 // maskANI masks P-Access-Network-Info for logs: the access type and the PLMN
 // are visible, the TAC and the cell ID (the last 11 hex digits of
-// utran-cell-id-3gpp) are hidden.
+// utran-cell-id-3gpp on LTE, the last 15 on NR) are hidden.
 func maskANI(ani string) string {
 	const key = "utran-cell-id-3gpp="
 	i := strings.Index(ani, key)
 	if i < 0 {
 		return ani
 	}
+	hidden := 11 // TAC 4 + ECI 7
+	if strings.HasPrefix(ani, "3GPP-NR-") {
+		hidden = 15 // TAC 6 + NCI 9
+	}
 	id := ani[i+len(key):]
-	if len(id) <= 11 {
+	if len(id) <= hidden {
 		return ani[:i+len(key)] + "…"
 	}
-	return ani[:i+len(key)] + id[:len(id)-11] + "…"
+	return ani[:i+len(key)] + id[:len(id)-hidden] + "…"
 }
 
 func fmtIPs(ips []net.IP) string {
