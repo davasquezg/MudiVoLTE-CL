@@ -131,34 +131,49 @@ ask() {
 
 # --- modem: AT commands through the GL ubus proxy ---
 
+# The SIM of the line: mudi-volte.main.sim_slot, 1 for the nano-SIM in slot 1
+# or 2 for slot 2 and the built-in eSIM, which takes the place of SIM 2
+# (AT+QSIMTYPE="slot2": 0 = nano-SIM, 1 = eSIM). Setup picks it (pick_sim);
+# every AT line below runs in its subscription, the modem's settings
+# included, so a restore writes back to the same one.
+SIM=
+sim() {
+	[ -n "$SIM" ] || SIM=$(uci -q get mudi-volte.main.sim_slot)
+	case "$SIM" in 1 | 2) ;; *) SIM=1 ;; esac
+	printf '%s' "$SIM"
+}
+
 at_raw() {
-	local c
+	local c s
+	s=$(sim)
 	c=$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')
-	ubus call modem.CPU.AT get_result_AT "{\"cmd\":\"$c\",\"timeout\":12,\"sub_id\":1}" 2>/dev/null |
+	ubus call modem.CPU.AT get_result_AT "{\"cmd\":\"$c\",\"timeout\":12,\"sub_id\":$s}" 2>/dev/null |
 		jsonfilter -e '@.data' 2>/dev/null | tr -d '\r'
 }
 
-# at CMD: a query in the SIM 1 context. GL's background poller (and the
-# service itself) keep switching the AT port's slot, so the slot is pinned in
-# the same AT line as the query; a separate pin call can be overtaken.
-# Right after boot such compound lines can fail; then pin and query apart.
+# at CMD: a query in the context of the line's SIM. GL's background poller
+# (and the service itself) keep switching the AT port's slot, so the slot is
+# pinned in the same AT line as the query; a separate pin call can be
+# overtaken. Right after boot such compound lines can fail; then pin and
+# query apart.
 at() {
-	local i out=''
+	local i out='' s
+	s=$(sim)
 	for i in 1 2 3 4 5; do
 		case "$1" in
 		AT+*)
-			out=$(at_raw "AT+QUIMSUB=1;+QUIMSUB?;${1#AT}")
+			out=$(at_raw "AT+QUIMSUB=$s;+QUIMSUB?;${1#AT}")
 			case "$out" in
 			*ERROR*) ;;
-			*'+QUIMSUB: 1'*OK*)
+			*"+QUIMSUB: $s"*OK*)
 				printf '%s\n' "$out"
 				return 0
 				;;
 			esac
 			;;
 		esac
-		case "$(at_raw 'AT+QUIMSUB=1;+QUIMSUB?')" in
-		*'+QUIMSUB: 1'*)
+		case "$(at_raw "AT+QUIMSUB=$s;+QUIMSUB?")" in
+		*"+QUIMSUB: $s"*)
 			out=$(at_raw "$1")
 			case "$out" in *OK*)
 				printf '%s\n' "$out"
@@ -173,14 +188,49 @@ at() {
 	return 1
 }
 
-# at_set CMD: a write pinned to SIM 1 in the same command line.
+# at_set CMD: a write pinned to the line's SIM in the same command line.
 at_set() {
-	local i
+	local i s
+	s=$(sim)
 	for i in 1 2 3; do
-		case "$(at_raw "AT+QUIMSUB=1;+${1#AT+}")" in *OK*) return 0 ;; esac
+		case "$(at_raw "AT+QUIMSUB=$s;+${1#AT+}")" in *OK*) return 0 ;; esac
 		sleep 1
 	done
 	return 1
+}
+
+# pick_sim: the SIM that carries the line, into SIM (setup writes it to
+# mudi-volte.main.sim_slot). A slot set there is kept. Without one: slot 1
+# when the modem was switched by an earlier setup (modem.orig, slot 1 then),
+# else the first slot with a ready SIM, slot 1 first. Fails when that SIM is
+# not ready (no card, a PIN, an eSIM profile that is off).
+pick_sim() {
+	local want s
+	want=$(uci -q get mudi-volte.main.sim_slot)
+	case "$want" in 1 | 2) ;; *) want= ;; esac
+	[ -z "$want" ] && [ -s "$ORIG" ] && want=1
+	for s in ${want:-1 2}; do
+		SIM=$s
+		case "$(at 'AT+CPIN?')" in *READY*) return 0 ;; esac
+	done
+	SIM=
+	if [ -n "$want" ]; then
+		die "$(T 'no SIM ready in slot %s (mudi-volte.main.sim_slot), or the SIM wants a PIN (unlock it in the GL admin panel first)' "$want")"
+	fi
+	die "$(T 'no SIM ready in slot 1 or slot 2 (the built-in eSIM takes the place of SIM 2), or the SIM wants a PIN (unlock it in the GL admin panel first)')"
+}
+
+# sim_label: how the line's SIM is called: "SIM 1", "SIM 2" or "eSIM".
+sim_label() {
+	if [ "$(sim)" = 2 ]; then
+		case "$(at 'AT+QSIMTYPE="slot2"')" in
+		*'"slot2",1'*)
+			T 'eSIM'
+			return 0
+			;;
+		esac
+	fi
+	T 'SIM %s' "$(sim)"
 }
 
 ims_mode() { at 'AT+QCFG="ims"' | sed -n 's/.*+QCFG: "ims",\([0-9]\).*/\1/p' | head -n 1; }
@@ -370,10 +420,7 @@ check_device() {
 	*RG650V*) ;;
 	*) die "$(T 'the modem does not answer as a Quectel RG650V')" ;;
 	esac
-	case "$(at 'AT+CPIN?')" in
-	*READY*) ;;
-	*) die "$(T 'no SIM card in slot 1, or the SIM wants a PIN (unlock it in the GL admin panel first)')" ;;
-	esac
+	pick_sim
 }
 
 # MCC → country calling code, for numbers dialled with a leading 0.
@@ -761,9 +808,13 @@ cmd_setup() {
 	oper=$(at 'AT+COPS?' | sed -n 's/.*+COPS: [0-9],[0-9],"\([^"]*\)".*/\1/p' | head -n 1)
 	say "$(T 'Modem: Quectel RG650V. SIM operator: %s (MCC %s).' "${oper:-$(T 'unknown')}" "${mcc:-?}")"
 	say "$(T 'VoLTE through this router needs an operator that offers VoLTE on your SIM.')"
+	say "$(T 'The phone line goes on %s.' "$(sim_label)")"
 
 	mkdir -p "$DATA"
 	chmod 700 "$DATA"
+	# The modem's settings below go to this SIM's subscription: the service
+	# and a later restore have to use the same one.
+	uci set "mudi-volte.main.sim_slot=$(sim)"
 	[ -n "$(phone_users)" ] || phone_add "$phone"
 	if [ -z "$(uci -q get mudi-volte.main.country)" ]; then
 		cc=$(country_code "$mcc")
@@ -848,6 +899,7 @@ cmd_status() {
 	'') say "$(T 'Modem:   not answering')" ;;
 	*) say "$(T "Modem:   built-in VoLTE mode: calls cannot reach this router (run 'mudi-volte setup')")" ;;
 	esac
+	say "$(T 'Line:    %s' "$(sim_label)")"
 	n=$(grep -c . "$MISSED" 2>/dev/null)
 	[ "${n:-0}" -gt 0 ] && say "$(T 'Missed:  %s call(s): mudi-volte missed' "$n")"
 	n=$(uci -q get mudi-volte.main.push_login)
@@ -950,6 +1002,7 @@ cmd_sms() {
 cmd_modem() {
 	case "${1:-status}" in
 	status)
+		say "$(T 'SIM:           %s (mudi-volte.main.sim_slot)' "$(sim_label)")"
 		say "$(T 'IMS mode:      %s (2 = External VoLTE stack, as mudi-volte needs)' "$(ims_mode)")"
 		say "voice_disable: $(voice_disable)"
 		say "mode_pref:     $(mode_pref)"

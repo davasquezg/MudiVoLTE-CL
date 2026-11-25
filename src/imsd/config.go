@@ -34,6 +34,7 @@ type Config struct {
 	PCSCFPort   int        `json:"pcscf_port"`   // unprotected P-CSCF port, 5060
 	IMEI        string     `json:"imei"`         // "" = auto (CGSN)
 	Domain      string     `json:"domain"`       // "" = from the ISIM or derived from the IMSI (TS 23.003 §13)
+	SIMSlot     int        `json:"sim_slot"`     // the SIM of the line: 1, or 2 (slot 2 or the built-in eSIM); 0 = 1
 	SMSC        string     `json:"smsc"`         // "" = from the SIM (EF_SMSP) or from the first incoming message
 	Codecs      []string   `json:"codecs"`       // network codecs in order; empty = whatever is linked in
 	// LooseInboundSrcPort: do not pin the P-CSCF source port in the inbound
@@ -117,6 +118,11 @@ func loadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("config: %w", err)
 	}
 	if err := json.Unmarshal(b, cfg); err != nil {
+		return nil, fmt.Errorf("config %s: %w", path, err)
+	}
+	// Every AT command, the IMS data call and the SMS spool follow the
+	// line's subscription from here on.
+	if err := setIMSSlot(cfg.SIMSlot); err != nil {
 		return nil, fmt.Errorf("config %s: %w", path, err)
 	}
 	return cfg, nil

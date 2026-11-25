@@ -54,7 +54,10 @@ códecs, tiempo de timbre, el número de prueba de eco, SMS en los teléfonos (`
 SIP, el puerto de configuración por QR, el cifrado (`encryption`, `tls_port` y `plain`:
 si UDP y TCP quedan abiertos junto a TLS), la cuenta para
 push a teléfonos dormidos (`push_login`, `push_password`; `push_url` y `push_domain`
-solo para un servidor FlexiAPI distinto de subscribe.linphone.org) y el nivel de log.
+solo para un servidor FlexiAPI distinto de subscribe.linphone.org), el nivel de log
+y la SIM de la línea (`sim_slot`: 1, o 2 para la ranura 2 y la eSIM integrada; la
+configuración elige la primera ranura con una SIM lista y la escribe; todos los
+comandos AT, la llamada de datos IMS y la cola de SMS usan su suscripción).
 Las páginas web editan el mismo archivo. Después de `uci commit mudi-volte`, ejecuta
 `mudi-volte restart`.
 

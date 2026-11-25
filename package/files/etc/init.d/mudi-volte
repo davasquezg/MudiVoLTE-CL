@@ -65,6 +65,9 @@ build_config() {
 	config_get port main port 5060
 	config_get provision_port main provision_port 8060
 	config_get log_level main log_level info
+	# The SIM of the line: 1, or 2 (slot 2 or the built-in eSIM); setup picks it.
+	config_get sim_slot main sim_slot 1
+	case "$sim_slot" in 1 | 2) ;; *) sim_slot=1 ;; esac
 	config_get_bool SMS main sms 1
 	config_get_bool ENCRYPTION main encryption 1
 	config_get_bool PLAIN main plain 1
@@ -85,6 +88,7 @@ build_config() {
 	json_add_string mode service
 	json_add_string log_level "$log_level"
 	json_add_string log_file "$LOG"
+	json_add_int sim_slot "$sim_slot"
 	if [ "$incoming" = allow ]; then
 		json_add_boolean incoming_all 0
 	else

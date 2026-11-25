@@ -1,6 +1,6 @@
 Package: mudi-volte-i18n-@LANG@
 Version: @VERSION@-1
-Depends: mudi-volte
+Depends: mudi-volte (= @VERSION@-1)
 Provides: luci-i18n-mudi-volte-@LANG@
 Source: MudiVoLTE
 License: PolyForm-Noncommercial-1.0.0
