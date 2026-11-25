@@ -8,7 +8,8 @@ screen app (MudiScreen) prints English and MudiScreen translates it with its
 own catalogs: package/po/<lang>/mudi-screen-volte.tsv, in MudiScreen's format
 (English<TAB>translation, {} matches any text), goes into the package as is. The template package/po/templates/mudi-volte.pot is made from the
 sources by `extract`; `update` merges it into the catalogs; `check` fails on
-untranslated texts or on placeholders that do not match; `build` writes the
+untranslated texts, on placeholders that do not match and on texts of the
+screen app that its catalog lacks (see screen_texts); `build` writes the
 files of the translation package for one language:
 
   usr/lib/lua/luci/i18n/mudi-volte.<lang>.lmo   LuCI (its own format, below)
@@ -39,7 +40,8 @@ with whitespace runs collapsed, so LuCI texts must not hold such runs
 Usage:
   i18n.py extract                 sources → package/po/templates/mudi-volte.pot
   i18n.py update                  .pot → every package/po/<lang>/mudi-volte.po
-  i18n.py check [LANG...]         every text translated, placeholders match
+  i18n.py check [LANG...]         every text translated, placeholders match,
+                                  the screen catalog covers app.sh
   i18n.py build LANG DESTDIR      the translation package's files
 """
 
@@ -201,6 +203,102 @@ def update():
             lang, len(new), sum(1 for e in new if not e[2]), len(dropped)))
 
 
+# The screen app and the texts MudiScreen shows of it (see screen_texts).
+SCREEN_APP = 'usr/share/mudi-screen/apps/volte/app.sh'
+SCREEN_KEYS = ('title', 'subtitle', 'text', 'label', 'value', 'confirm', 'confirm_label')
+# Names that read the same in every language: a text made only of them and
+# of variable parts, such as "VoLTE · {}", needs no translation.
+SCREEN_NAMES = {'VoLTE', 'LTE', 'IMS', 'SIP', 'SMS'}
+# A shell word: double-quoted, single-quoted or bare (${var:-a default} included).
+SH_WORD = r'''(?:"(?:[^"\\]|\\.)*"|'[^']*'|(?:\$\{[^}]*\}|[^\s;|&"'])+)'''
+
+
+def screen_texts():
+    """The English texts app.sh can print, as MudiScreen patterns ({} for a
+    variable part), each with a line it comes from.
+
+    A heuristic on the shell source, not a shell parser. A text is a word
+    (quoted or bare) that is
+      - the value of json_add_string with a key of SCREEN_KEYS,
+      - the label of section or info, or the value of info,
+      - what echo prints to standard output (not with >&2): phase_text, ago
+        and the answer to an action,
+      - the value assigned to a variable that one of the above shows
+        (title="Calls are on", state=online), or the default of
+        ${var:-default} in any of them.
+    In a text, $var, ${var}, $(...), $((...)) and MudiScreen's {name:...}
+    become {}; a text with no letters outside {} (a variable alone) or made
+    only of SCREEN_NAMES is left out. A text printed another way (printf, a
+    here-document) is not found: keep app.sh to these forms.
+    """
+    with open(os.path.join(FILES, SCREEN_APP), encoding='utf-8') as f:
+        lines = [(no, line.strip()) for no, line in enumerate(f.read().split('\n'), 1)
+                 if not line.strip().startswith('#')]
+    shown, words = set(), []  # the variables shown; the words shown, with their line
+
+    def show(word, no):
+        words.append((word, no))
+        shown.update(re.findall(r'\$\{?([A-Za-z_]\w*)', word))
+    for no, code in lines:
+        for m in re.finditer(r'\bjson_add_string\s+(\w+)\s+(' + SH_WORD + ')', code):
+            if m.group(1) in SCREEN_KEYS:
+                show(m.group(2), no)
+        for m in re.finditer(r'(?:^|[\s;])(section|info)\s+(' + SH_WORD + r')(?:\s+(' + SH_WORD + '))?', code):
+            show(m.group(2), no)
+            if m.group(1) == 'info' and m.group(3):
+                show(m.group(3), no)
+        if '>&2' not in code:
+            for m in re.finditer(r'(?:^|[\s;)])echo\s+(' + SH_WORD + ')', code):
+                show(m.group(1), no)
+    for no, code in lines:
+        for m in re.finditer(r'(?:^|[\s;)])([A-Za-z_]\w*)=(' + SH_WORD + ')', code):
+            # A command's output ($(ago ...)) is found through its echo.
+            if m.group(1) in shown and not m.group(2).lstrip('"').startswith('$('):
+                words.append((m.group(2), no))
+    texts = {}
+
+    def add(t, no):
+        t = t.strip()
+        letters = set(re.findall(r'[A-Za-z]+', t.replace('{}', ' ')))
+        if letters and not letters <= SCREEN_NAMES:
+            texts.setdefault(t, '%s:%d' % (SCREEN_APP, no))
+    for word, no in words:
+        if word[:1] == "'":
+            add(word[1:-1], no)
+            continue
+        if word[:1] == '"':
+            word = re.sub(r'\\(.)', r'\1', word[1:-1])
+        for d in re.findall(r'\$\{[A-Za-z_]\w*:-([^}]*)\}', word):
+            add(d, no)
+        t = re.sub(r'\{\w+:[^{}]*\}', '{}', word)
+        t = re.sub(r'\$\(\([^)]*\)\)|\$\([^)]*\)|\$\{[^}]*\}|\$[A-Za-z_]\w*|\$[0-9#?@*]', '{}', t)
+        add(t, no)
+    return texts
+
+
+def check_screen(lang):
+    """What app.sh prints that package/po/<lang>/mudi-screen-volte.tsv does
+    not translate. MudiScreen looks a text up whole; a {} in the English
+    column matches any text."""
+    path = os.path.join(PO_DIR, lang, 'mudi-screen-volte.tsv')
+    rel = 'package/po/%s/mudi-screen-volte.tsv' % lang
+    if not os.path.isfile(path):
+        return ['%s: missing: the screen app would stay in English' % rel]
+    bad, keys = [], []
+    with open(path, encoding='utf-8') as f:
+        for no, line in enumerate(f.read().replace('\r\n', '\n').split('\n'), 1):
+            if not line.strip() or line.startswith('#'):
+                continue
+            if line.count('\t') != 1 or not line.split('\t')[1].strip():
+                bad.append('%s:%d: not English<TAB>translation: %r' % (rel, no, line))
+                continue
+            keys.append(re.compile('.*'.join(re.escape(p) for p in line.split('\t')[0].split('{}'))))
+    for t, where in sorted(screen_texts().items(), key=lambda e: int(e[1].rsplit(':', 1)[1])):
+        if not any(k.fullmatch(t) for k in keys):
+            bad.append('%s: untranslated screen text (%s): %r' % (rel, where, t))
+    return bad
+
+
 def check(langs):
     template = {e[1] for e in read_po(POT)}
     bad = []
@@ -217,6 +315,7 @@ def check(langs):
                 bad.append('%s: newline, tab or backslash: %r' % (where, msgstr))
         missing = template - {e[1] for e in read_po(os.path.join(PO_DIR, lang, DOMAIN + '.po'))}
         bad += ['%s: missing (run update): %r' % (lang, m) for m in sorted(missing)]
+        bad += check_screen(lang)
     if bad:
         sys.exit('\n'.join(bad))
     print('ok')

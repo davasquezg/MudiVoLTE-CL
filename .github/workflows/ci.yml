@@ -107,6 +107,7 @@ jobs:
           python3 package/toolchain/i18n.py extract
           git diff --exit-code package/po/templates/
           python3 package/toolchain/i18n.py check
+          python3 package/tests/i18n.test.py
           for d in package/po/*/; do
             l=$(basename "$d"); [ "$l" = templates ] && continue
             python3 package/toolchain/i18n.py build "$l" "$RUNNER_TEMP/i18n-$l"

@@ -83,7 +83,21 @@ Después de cambiar textos:
 python3 package/toolchain/i18n.py extract   # código → package/po/templates/mudi-volte.pot
 python3 package/toolchain/i18n.py update    # .pot → package/po/<idioma>/mudi-volte.po
 python3 package/toolchain/i18n.py check     # todo traducido, marcadores coinciden
+python3 package/tests/i18n.test.py          # las pruebas de la revisión de la pantalla
 ```
+
+`check` además compara `package/po/<idioma>/mudi-screen-volte.tsv` con los
+textos que puede imprimir la app de pantalla
+(`usr/share/mudi-screen/apps/volte/app.sh`) e indica los que no tienen una línea
+en él. Lee `app.sh` por sus formas, no como un shell: los valores de
+`json_add_string` con las claves `title`, `subtitle`, `text`, `label`, `value`,
+`confirm` y `confirm_label`, la etiqueta y el valor de `info` y `section`, lo
+que `echo` imprime en la salida estándar (`phase_text`, `ago`, la respuesta a
+una acción), los valores que reciben las variables que estos muestran y los
+valores por defecto de `${var:-defecto}`. Las partes variables (`$var`,
+`$(...)`, `$((...))`, `{elapsed:...}`) pasan a ser `{}`; una variable sola, o
+solo nombres como `VoLTE`, no es un texto. Un texto impreso de otra forma
+(`printf`, un here-document) no se detecta: mantén `app.sh` en estas formas.
 
 Un idioma nuevo: copia la cabecera de `package/po/es/mudi-volte.po` en
 `package/po/<idioma>/mudi-volte.po`, ejecuta `update`, completa cada `msgstr` y
