@@ -51,6 +51,31 @@ The XFRM test of
 touches the modem, the IMS side or the phones should be tried on a Mudi 7 as
 well; say in the pull request what you tried it on.
 
+On Windows (Git Bash) part of this runs too:
+
+- Go: `volte/auth`, `volte/media`, `volte/media/g722` and `volte/srtp` test
+  natively; the rest of `volte` and the daemon build only for Linux.
+  `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go vet ./...` in `volte/` and
+  `src/imsd/` type-checks them; their tests run in CI (or on a Linux host).
+- `lifecycle.test.py` runs with the Windows Python
+  (`python -I package/tests/lifecycle.test.py`) and a `busybox` on `PATH`.
+  A `busybox.cmd` that drops its first argument (`ash`) and starts Git's
+  `sh.exe` will do:
+
+  ```bat
+  @echo off
+  shift
+  "C:\Program Files\Git\usr\bin\sh.exe" %1 %2 %3 %4 %5 %6 %7 %8 %9
+  ```
+
+  The one test that needs POSIX process ids is skipped there.
+- `sh package/tests/run.sh` works as is with node and npm on `PATH`.
+- `.gitattributes` keeps every text file on LF, also with
+  `core.autocrlf=true`. A checkout made before that file came still has CRLF
+  files; `git rm --cached -r -q . && git reset -q --hard` (on a clean tree)
+  checks them out again with LF. Build packages only from an LF tree: the
+  scripts would reach the router with CR otherwise.
+
 ## Code
 
 - Go is formatted with `gofmt`; shell scripts pass `shellcheck`; comments and

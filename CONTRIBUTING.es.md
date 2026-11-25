@@ -51,6 +51,35 @@ La prueba de XFRM de
 afecte el módem, el lado IMS o los teléfonos también debe probarse en un Mudi 7;
 indica en el pull request en qué lo probaste.
 
+En Windows (Git Bash) también corre una parte de esto:
+
+- Go: `volte/auth`, `volte/media`, `volte/media/g722` y `volte/srtp` se
+  prueban de forma nativa; el resto de `volte` y el daemon solo compilan para
+  Linux. `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go vet ./...` en `volte/` y
+  `src/imsd/` revisa sus tipos; sus pruebas corren en el CI (o en un equipo
+  con Linux).
+- `lifecycle.test.py` corre con el Python de Windows
+  (`python -I package/tests/lifecycle.test.py`) y un `busybox` en el `PATH`.
+  Sirve un `busybox.cmd` que descarta su primer argumento (`ash`) e inicia el
+  `sh.exe` de Git:
+
+  ```bat
+  @echo off
+  shift
+  "C:\Program Files\Git\usr\bin\sh.exe" %1 %2 %3 %4 %5 %6 %7 %8 %9
+  ```
+
+  La única prueba que necesita los identificadores de proceso de POSIX se
+  omite ahí.
+- `sh package/tests/run.sh` funciona tal cual con node y npm en el `PATH`.
+- `.gitattributes` mantiene todos los archivos de texto con LF, también con
+  `core.autocrlf=true`. Un checkout hecho antes de que existiera ese archivo
+  todavía tiene archivos con CRLF;
+  `git rm --cached -r -q . && git reset -q --hard` (con el árbol limpio) los
+  vuelve a extraer con LF. Construye los
+  paquetes solo desde un árbol con LF: si no, los scripts llegarían al router
+  con CR.
+
 ## Código
 
 - El código Go se formatea con `gofmt`; los scripts de shell pasan `shellcheck`; los comentarios y
