@@ -454,10 +454,13 @@ relay, with more delay.
   about every 2.4 s), probably because the modem shares its radio between the
   SIMs. Automatic switching (SIM Failover) has not been tested.
 - No voice over 5G standalone (VoNR). The line needs LTE; 5G NSA is fine, since
-  calls go over its LTE anchor. On a network with 5G SA the line does not come
-  up: turn SA off in the modem with `AT+QNWPREFCFG="nr5g_disable_mode",1` (the
-  AT Command tool in the GL admin panel, SIM 1). We have no such network to
-  test this on.
+  calls go over its LTE anchor. When the modem is camped on 5G SA the daemon now
+  reads the NR cell and still tries to register (if it cannot read the cell, it
+  registers with the last cell it read, or without one), but whether the
+  network accepts that and calls work is to verify on the router: we have no
+  such network to test on. If the line does not come up on SA, turn SA off in
+  the modem with `AT+QNWPREFCFG="nr5g_disable_mode",1` (the AT Command tool in
+  the GL admin panel, SIM 1).
 - On iPhone, incoming calls in the background need the push account (see
   [Phones in the background](#phones-in-the-background)). SMS to an iPhone still
   arrive only while Linphone is open. An iPhone set up on UDP cannot be woken

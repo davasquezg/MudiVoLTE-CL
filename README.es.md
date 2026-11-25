@@ -502,10 +502,13 @@ de redes móviles, puede pasar por un relay, con más retardo.
   probablemente porque el módem comparte su radio entre las SIM. El cambio
   automático (SIM Failover) no se ha probado.
 - Sin voz sobre 5G standalone (VoNR). La línea necesita LTE; 5G NSA sirve, ya
-  que las llamadas van por su ancla LTE. En una red con 5G SA la línea no se
-  levanta: desactiva SA en el módem con `AT+QNWPREFCFG="nr5g_disable_mode",1`
-  (la herramienta AT Command del panel de administración de GL, SIM 1). No
-  tenemos una red así para probarlo.
+  que las llamadas van por su ancla LTE. Cuando el módem está en 5G SA, el
+  daemon ahora lee la celda NR y aun así intenta registrarse (si no puede leer
+  la celda, se registra con la última que leyó, o sin ella), pero si la red lo
+  acepta y las llamadas funcionan está por verificar en el router: no tenemos
+  una red así para probarlo. Si la línea no se levanta en SA, desactiva SA en
+  el módem con `AT+QNWPREFCFG="nr5g_disable_mode",1` (la herramienta AT Command
+  del panel de administración de GL, SIM 1).
 - En iPhone, las llamadas entrantes en segundo plano necesitan la cuenta push
   (ver [Teléfonos en segundo plano](#teléfonos-en-segundo-plano)). Los SMS a un
   iPhone siguen llegando solo mientras Linphone está abierto. Un iPhone
