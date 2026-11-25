@@ -526,11 +526,15 @@ Si la red del operador acepta un REGISTER con la forma NR está **por verificar 
 (VoNR en sí sigue sin soporte, ver el README).
 
 **Largo del MNC (issue #12).** Todas las capturas que conocemos imprimen el MNC como cadena con su
-cero a la izquierda (`01`, `00`, `260`), pero un firmware que lo imprimiera como número convertiría
-`01` en `1` y dejaría el ID de celda con un dígito de menos. El daemon lee la celda después de la SIM
-y rellena el MNC: al largo del MNC propio que da la SIM (EF_AD) cuando la celda tiene el MCC propio;
-si no, un MNC de 1 dígito a 2 dígitos. Nunca acorta un MNC. Los países que mezclan MNC de 2 y 3
-dígitos bajo un mismo MCC no quedan cubiertos si el módem pierde el cero.
+cero a la izquierda (`01`, `00`, `260`), y TS 24.229 dice que el MNC "should be obtained from the
+E-UTRAN Cell Global Identifier (ECGI)", que es lo que imprime el módem. Por eso un MNC de 2 o 3 dígitos
+se usa tal como lo imprime el módem, sea cual sea el largo del MNC de la SIM: algunos países mezclan
+MNC de 2 y 3 dígitos bajo un mismo MCC, y el largo de la SIM no dice nada del MNC de otra red. Solo se
+rellena un MNC de 1 dígito (un firmware que lo imprimiera como número convertiría `01` en `1` y
+dejaría el ID de celda con un dígito de menos): el daemon lee la celda después de la SIM y, si el MNC
+rellenado a 3 dígitos es el MNC propio de 3 dígitos de la SIM (EF_AD) bajo el MCC propio, queda con 3
+dígitos; si no, con 2. Nunca acorta un MNC. Un MNC de 1 dígito de otra red con MNC de 3 dígitos
+seguiría saliendo mal; no se conoce ninguna captura con un MNC de 1 dígito.
 
 **Celda ilegible (issue #7).** Si ningún intento entrega una celda (un formato desconocido, o un
 momento sin celda), el registro sigue: con el último P-Access-Network-Info leído desde que partió el
@@ -538,8 +542,12 @@ daemon (solo en memoria) o, si no hay, sin la cabecera. Ambos casos dejan un avi
 `volte/reg` y `volte/call` agregan la cabecera solo cuando tiene valor; TS 24.229 pide que el UE la
 envíe, así que una red podría rechazar un REGISTER sin ella (por verificar con el operador).
 
-Si el módem está en WCDMA (un estado transitorio después de que se levanta el PDN), no construir un PANI para E-UTRAN;
-esperar LTE (§79).
+Si el módem está en WCDMA (un estado transitorio después de que se levanta el PDN), no se construye un PANI
+para E-UTRAN (§79). Antes del issue #7 la configuración fallaba y se reintentaba hasta que volvía LTE;
+ahora esa respuesta cuenta como una celda ilegible, así que el registro sigue con el último PANI o sin
+él, como arriba. El PANI queda fijo al construir la pila IMS: un PANI reutilizado (quizás desactualizado)
+o ausente se mantiene en cada REGISTER y llamada hasta que se reconstruye la sesión IMS (un reinicio de
+la sesión o del daemon). El aviso del log lo indica.
 
 El ID de celda revela la ubicación del router con una precisión de cientos de metros. Desde la 0.9.14 el daemon
 registra en el log solo el PLMN (`…=00101…`) en nivel info (en NR se ocultan los últimos 15 dígitos hex, en LTE

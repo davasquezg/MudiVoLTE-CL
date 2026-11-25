@@ -525,11 +525,15 @@ Whether the operator's network accepts a REGISTER with the NR form is **to verif
 (VoNR itself is still not supported, see the README).
 
 **MNC length (issue #12).** Every capture we know of prints the MNC as a string with its leading
-zero (`01`, `00`, `260`), but a firmware that printed it as a number would turn `01` into `1` and
-make the cell ID one digit short. The daemon reads the cell after the SIM and pads the MNC: to the
-length of the home MNC from the SIM (EF_AD) when the cell has the home MCC, else a 1-digit MNC to 2
-digits. It never shortens an MNC. Countries that mix 2- and 3-digit MNCs under one MCC are not
-covered when the modem drops the zero.
+zero (`01`, `00`, `260`), and TS 24.229 says the MNC "should be obtained from the E-UTRAN Cell Global
+Identifier (ECGI)", which is what the modem prints. So an MNC of 2 or 3 digits is used exactly as the
+modem prints it, whatever the SIM's MNC length: some countries mix 2- and 3-digit MNCs under one MCC,
+and the SIM's length says nothing about another network's MNC. Only a 1-digit MNC (a firmware that
+printed it as a number would turn `01` into `1` and make the cell ID one digit short) is padded: the
+daemon reads the cell after the SIM, and if the MNC padded to 3 digits is the SIM's 3-digit home MNC
+(EF_AD) under the home MCC, it gets 3 digits; otherwise it gets 2. It never shortens an MNC. A
+1-digit MNC of another network with a 3-digit MNC would still come out wrong; no capture with a
+1-digit MNC is known.
 
 **Cell not readable (issue #7).** If no attempt gives a cell (an unknown format, no cell for a
 moment), the registration goes on: with the last P-Access-Network-Info read since the daemon
@@ -537,8 +541,12 @@ started (kept in memory only), else without the header. Both cases log a warning
 `volte/reg` and `volte/call` add the header only when it is set; TS 24.229 asks the UE to send it,
 so a network may reject a REGISTER without it (to verify with the operator).
 
-If the modem is on WCDMA (a transient state after the PDN comes up), do not build a PANI for E-UTRAN;
-wait for LTE (§79).
+If the modem is on WCDMA (a transient state after the PDN comes up), no PANI is built for E-UTRAN
+(§79). Before issue #7 the setup then failed and was retried until LTE came back; now the reply counts
+as a cell that cannot be read, so the registration goes on with the last PANI or without one, as
+above. The PANI is fixed when the IMS stack is built: a reused (possibly stale) or missing PANI stays
+in every REGISTER and call until the IMS session is rebuilt (a restart of the session or of the
+daemon). The warning in the log says so.
 
 The cell ID reveals the router's location to within hundreds of meters. Since 0.9.14 the daemon
 logs only the PLMN (`…=00101…`) at info level (on NR the last 15 hex digits are hidden, on LTE the

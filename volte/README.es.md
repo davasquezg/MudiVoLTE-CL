@@ -72,6 +72,9 @@ publicado.
   `500 … "AKA IP+Port conflict"` (§93, §94). Tras un desafío 401, las SA nuevas
   se instalan junto a las antiguas; el puerto de servidor del UE (el Contact de las
   llamadas) no cambia mientras dura el registro.
-- P-Access-Network-Info es obligatorio; se construye a partir de `AT+QENG="servingcell"`.
+- P-Access-Network-Info lo exige TS 24.229; imsd normalmente lo construye a partir
+  de `AT+QENG="servingcell"`. `volte/reg` y `volte/call` lo agregan solo cuando
+  tiene valor: si no se ha leído ninguna celda, imsd lo omite con un aviso (ver
+  docs/PROTOCOLS.es.md §2.6).
 
 De dónde viene el código: `PROVENANCE.es.md`.
