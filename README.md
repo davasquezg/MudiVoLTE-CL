@@ -23,9 +23,11 @@ SIM or the built-in eSIM active next to the SIM of the line. On 4.10.2: the
 firmware update from 4.10.0 with Keep Settings, registration, and an incoming
 call answered on an iPhone woken by a push.
 
-> **Before you start.** Emergency numbers (112, 911, 999 and the like) are
-> not guaranteed to work through MudiVoLTE: keep a phone with its own SIM for
-> them. Running the operator's IMS client on a router may be against the
+> **Before you start.** Emergency numbers (112, 911, 999 and the like; in
+> Chile 131 SAMU ambulance, 132 fire brigade, 133 Carabineros police, 134 PDI
+> police, 136 Andean rescue corps, 137 sea rescue and 138 air rescue, a list
+> not yet checked against an official Chilean source) are not guaranteed to
+> work through MudiVoLTE: keep a phone with its own SIM for them. Running the operator's IMS client on a router may be against the
 > terms of your mobile contract; check them. MudiVoLTE is a personal project,
 > tested with one operator, and comes without any warranty (see
 > [LICENSE](LICENSE)).
@@ -474,7 +476,10 @@ relay, with more delay.
 - A GL firmware update removes the package: install it again afterwards (see
   [GL firmware updates](#gl-firmware-updates)). Until then the modem stays in
   External VoLTE mode and calls are not answered.
-- Emergency calls are not guaranteed to work. No video, no conference calls.
+- Emergency calls are not guaranteed to work: an emergency number (112, or
+  131-134 and 136-138 in Chile) goes out as an ordinary call to that number,
+  not as an IMS emergency call (`urn:service:sos`), and a `dial` list that does
+  not name it refuses it. No video, no conference calls.
 
 ## How it works
 
