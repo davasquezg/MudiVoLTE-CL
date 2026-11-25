@@ -13,7 +13,7 @@ config voip 'main'
 	# Chile. A short number (149) must be listed as it is. The emergency
 	# numbers below are always allowed.
 	option dial '*'
-	# Country code for numbers dialled with a leading 0 (e.g. 44 for the UK),
+	# Country code for numbers dialled with a leading 0 (e.g. 44 for the UK, 56 for Chile),
 	# or, in a country without that 0, dialled with 'national_len' digits.
 	# Filled in by setup from the SIM (MCC 730 is 56, Chile); an install made
 	# before setup knew Chile needs: uci set mudi-volte.main.country=56

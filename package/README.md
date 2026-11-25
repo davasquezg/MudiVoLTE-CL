@@ -143,7 +143,7 @@ now `mudi-volte-i18n-es`, Spanish; architecture `all`, it also provides
 | Where | Language it follows |
 |---|---|
 | Command line tool and setup | `mudi-volte.main.lang` |
-| Page in the GL admin panel and its error messages | `mudi-volte.main.lang`; unset: the panel's language, else the browser's |
+| Page in the GL admin panel and its error messages | `mudi-volte.main.lang`; unset: the panel's language, else the browser's (a region such as `es-CL` takes the catalog `es_cl`, else `es`) |
 | Page in LuCI | LuCI's language (System > System > Language) |
 | App on the router's screen (MudiScreen) | The screen's language (Settings > Language) |
 

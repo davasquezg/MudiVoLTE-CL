@@ -133,7 +133,20 @@ After changing texts:
 python3 package/toolchain/i18n.py extract   # sources → package/po/templates/mudi-volte.pot
 python3 package/toolchain/i18n.py update    # .pot → package/po/<lang>/mudi-volte.po
 python3 package/toolchain/i18n.py check     # every text translated, placeholders match
+python3 package/tests/i18n.test.py          # the tests of the screen check
 ```
+
+`check` also compares `package/po/<lang>/mudi-screen-volte.tsv` with the texts
+that the screen app (`usr/share/mudi-screen/apps/volte/app.sh`) can print, and
+names those without a line in it. It reads `app.sh` by its forms, not as a
+shell: the values of `json_add_string` with the keys `title`, `subtitle`,
+`text`, `label`, `value`, `confirm` and `confirm_label`, the label and value of
+`info` and `section`, what `echo` prints to standard output (`phase_text`,
+`ago`, the answer to an action), the values given to the variables these show
+and the defaults of `${var:-default}`. Variable parts (`$var`, `$(...)`,
+`$((...))`, `{elapsed:...}`) become `{}`; a variable alone, or only names such
+as `VoLTE`, is no text. A text printed in another way (`printf`, a
+here-document) is not seen: keep `app.sh` to these forms.
 
 A new language: copy the header of `package/po/es/mudi-volte.po` into
 `package/po/<lang>/mudi-volte.po`, run `update`, fill in every `msgstr`, and
