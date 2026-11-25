@@ -19,7 +19,7 @@ que la 0.2.0 del original y más antigua que una 0.2.1 del original, así que
 una versión del original publicada después es una actualización; la
 versión del fork sobre ella es la 0.2.1.1, de nuevo más nueva.
 
-## 0.2.0.1 (sin publicar)
+## 0.2.0.1 (2026-11-25, versión de prueba: por probar en el router)
 
 Primera versión del fork, sobre la 0.2.0 del original. Lo que cambia para
 Chile, y lo que sigue pendiente, está en los

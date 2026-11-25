@@ -18,7 +18,7 @@ newer than upstream 0.2.0 and older than an upstream 0.2.1, so an upstream
 release that came later is an upgrade; the fork's release on top of it is
 0.2.1.1, newer again.
 
-## 0.2.0.1 (unreleased)
+## 0.2.0.1 (2026-11-25, pre-release: to test on the router)
 
 First release of the fork, on top of upstream 0.2.0. What changes for
 Chile, and what is still open, is in the
