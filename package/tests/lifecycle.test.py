@@ -181,6 +181,22 @@ class Lifecycle(unittest.TestCase):
         with (self.sb / "data/modem.orig").open("a") as f:
             f.write("nr5g_disable_mode=0\n")
 
+    def test_5g_standalone_reply_parsing(self):
+        # The real nr5g_disable_mode (STUBS replace it): the reply format is
+        # not verified on the router, so the read takes spaces around the
+        # comma and a CR, and gives nothing for a reply without a digit.
+        real = re.search(r"^nr5g_disable_mode\(\) \{.*\}$", SOURCE, re.M).group(0)
+        for reply, value in (('+QNWPREFCFG: "nr5g_disable_mode",0\r', "0"),
+                             ('+QNWPREFCFG: "nr5g_disable_mode" , 1', "1"),
+                             ('+QNWPREFCFG: "nr5g_disable_mode",2', "2"),
+                             ('+QNWPREFCFG: "nr5g_disable_mode",', ""),
+                             ("ERROR", "")):
+            with self.subTest(reply=reply):
+                r = self.run_case(real + '\nat() { printf \'%s\\n\' "$REPLY_AT"; }\n'
+                                  'echo "[$(nr5g_disable_mode)]"', REPLY_AT=reply)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(r.stdout.strip(), "[%s]" % value)
+
     def test_external_without_backup_uses_factory_voice_defaults(self):
         r = self.run_case("save_orig", MODE="2", VDOM="1", UE="1")
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -800,6 +816,41 @@ class FailedSetup(unittest.TestCase):
         self.assertLeftAlone(r)
         self.assertIn("could not read nr5g_disable_mode", r.stderr)
         self.assertEqual(self.read("at").splitlines(), SETUP + BEFORE[::-1])
+
+    def setup_external(self, *args, **env):
+        """setup on a modem already in External VoLTE mode with the voice
+        values of setup, as after an earlier setup; the radio cycle is a stub."""
+        p = self.sb / "case.sh"
+        p.write_text(self.base + '\nradio_cycle() { echo cycle >>"$SB/events"; }\ncmd_setup '
+                     + " ".join(args) + "\n")
+        return subprocess.run(SHELL + [str(p)], env={**os.environ, "SB": str(self.sb), **EXTERNAL, **env},
+                              text=True, capture_output=True, timeout=10)
+
+    def test_no_sa_on_external_mode_turns_5g_standalone_off(self):
+        # The likely path of #7: setup ran before, the line does not come up
+        # on a 5G SA network, and setup --no-sa runs again. Only the new value
+        # is written, kept for the restore, and the radio reconnects.
+        r = self.setup_external("--no-sa")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), [NO_SA, "AT+QEFSSYNC=0"])
+        self.assertIn("nr5g_disable_mode=0\n", self.read("data/modem.orig"))
+        ev = self.read("events").splitlines()
+        self.assertIn("cycle", ev)
+        self.assertLess(ev.index("init stop"), ev.index("cycle"))
+
+    def test_refused_sa_off_on_external_mode_fails_the_setup(self):
+        r = self.setup_external("--no-sa", FAIL_AT="nr5g_disable_mode")
+        self.assertLeftAlone(r)
+        self.assertIn("the modem refused " + NO_SA, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), [NO_SA])
+        self.assertFalse((self.sb / "data/modem.orig").exists())  # saved by this run
+        self.assertNotIn("cycle", self.read("events"))
+
+    def test_no_sa_on_external_mode_with_sa_already_off_writes_nothing(self):
+        r = self.setup_external("--no-sa", SA="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read("at"), "")
+        self.assertNotIn("cycle", self.read("events"))
 
     def test_refused_mode_switch_keeps_sleep_settings(self):
         # Review 14.11 (docs): "a failed setup leaves the router as it was",
