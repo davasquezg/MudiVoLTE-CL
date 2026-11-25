@@ -132,7 +132,7 @@ func (c *Config) ipsecOffers() ([]reg.Offer, error) {
 	for _, s := range c.IPsecOffers {
 		o, err := reg.ParseOffer(s)
 		if err != nil {
-			return nil, fmt.Errorf("ipsec_offers: %w", err)
+			return nil, fmt.Errorf("ipsec_offers (UCI ipsec_offer): %w", err)
 		}
 		out = append(out, o)
 	}
@@ -171,7 +171,7 @@ func (c *Config) check() error {
 	have := availableCodecs()
 	for _, name := range c.Codecs {
 		if !slices.ContainsFunc(have, func(h string) bool { return strings.EqualFold(h, name) }) {
-			return fmt.Errorf("codecs: %q is not one of %s", name, strings.Join(have, ", "))
+			return fmt.Errorf("codecs (UCI network_codecs): %q is not one of %s", name, strings.Join(have, ", "))
 		}
 	}
 	// APN network identifier: labels of letters, digits and hyphens, 100

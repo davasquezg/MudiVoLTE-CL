@@ -81,11 +81,15 @@ The IPsec pairs are `hmac-md5-96` or `hmac-sha-1-96` with `null`, `aes-cbc` or
 `des-ede3-cbc`. Unset, the daemon offers all six, `hmac-md5-96/null` first (the
 only one offered before, and the one the tested network chose), then
 `hmac-sha-1-96/null`, then the pairs with encryption. Those have not been tried
-on a live network: should registration fail while installing the IPsec SAs
-after the network chose a cipher, offer only the two pairs without one.
+on a live network, and the router's kernel may lack their ciphers (to verify on
+the router): when installing the IPsec SAs fails after the network chose a
+cipher, the daemon logs a warning and registers again offering only the pairs
+without encryption. To never offer encryption, list only those two pairs.
 The daemon checks these values when it starts: with one it cannot use it does not
-start, and names the option in the log and in `mudi-volte status` (a `pcscf_port`
-or `ims_profile` that is not a number only in the log). The log also says
+start, and names the option in the log and in `mudi-volte status`, by its daemon
+field followed by the UCI option where the two differ, e.g.
+`codecs (UCI network_codecs)` (a `pcscf_port` or `ims_profile` that is not a
+number only in the log). The log also says
 which modem profile it took for IMS and why.
 
 ## Languages

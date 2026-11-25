@@ -81,11 +81,16 @@ Los pares IPsec son `hmac-md5-96` o `hmac-sha-1-96` con `null`, `aes-cbc` o
 `des-ede3-cbc`. Sin definir, el daemon ofrece los seis, primero `hmac-md5-96/null` (el
 único que se ofrecía antes y el que eligió la red probada), luego
 `hmac-sha-1-96/null` y después los pares con cifrado. Estos no se han probado en
-una red real: si el registro falla al instalar las SA IPsec después de que la red
-eligió un cifrado, ofrece solo los dos pares sin cifrado.
+una red real, y puede que al kernel del router le falten sus cifradores (por
+verificar en el router): si falla la instalación de las SA IPsec después de que la
+red eligió un cifrado, el daemon deja una advertencia en el log y se registra de
+nuevo ofreciendo solo los pares sin cifrado. Para no ofrecer cifrado nunca, deja en
+la lista solo esos dos pares.
 El daemon revisa estos valores al iniciar: con uno que no puede usar no inicia, e
-indica la opción en el log y en `mudi-volte status` (un `pcscf_port` o un
-`ims_profile` que no es un número, solo en el log). El log también indica qué perfil del
+indica la opción en el log y en `mudi-volte status`, con su campo del daemon
+seguido de la opción UCI cuando no coinciden, por ejemplo
+`codecs (UCI network_codecs)` (un `pcscf_port` o un `ims_profile` que no es un
+número, solo en el log). El log también indica qué perfil del
 módem tomó para IMS y por qué.
 
 ## Idiomas

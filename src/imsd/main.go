@@ -125,8 +125,11 @@ func runCheck(cfg *Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("check: identities: %w", err)
 	}
-	st, err := newNetStack("", regConfig(cfg, ids, "000000000000000", local, pcscf, "3GPP-E-UTRAN-FDD", logger),
-		nil, callConfig(cfg, "", logger), smsConfig(cfg, ids, "", logger), logger)
+	rc, err := regConfig(cfg, ids, "000000000000000", local, pcscf, "3GPP-E-UTRAN-FDD", logger)
+	if err != nil {
+		return fmt.Errorf("check: %w", err)
+	}
+	st, err := newNetStack("", rc, nil, callConfig(cfg, "", logger), smsConfig(cfg, ids, "", logger), logger)
 	if err != nil {
 		return fmt.Errorf("check: stack: %w", err)
 	}
@@ -182,7 +185,7 @@ func deriveIdentities(imsi, mcc, mnc, domain string) (identities, error) {
 	return identities{IMPI: imsi + "@" + domain, IMPU: "sip:" + imsi + "@" + domain, Domain: domain}, nil
 }
 
-func regConfig(cfg *Config, ids identities, imei string, ue netip.Addr, pcscf []net.IP, ani string, logger *slog.Logger) reg.Config {
+func regConfig(cfg *Config, ids identities, imei string, ue netip.Addr, pcscf []net.IP, ani string, logger *slog.Logger) (reg.Config, error) {
 	port := uint16(cfg.PCSCFPort)
 	if port == 0 {
 		port = 5060
@@ -201,9 +204,14 @@ func regConfig(cfg *Config, ids identities, imei string, ue netip.Addr, pcscf []
 	if cfg.IPsecTool == "ip" {
 		rc.IPsec = ipsec.ExecRunner{} // netlink otherwise (the library's default)
 	}
-	// Checked when the config was loaded; reg.New rejects it otherwise.
-	rc.Offers, _ = cfg.ipsecOffers()
-	return rc
+	// Config.check, which every mode that registers runs first, rejects an
+	// invalid list already; one that gets here all the same is an error
+	// rather than the default offer in its place.
+	var err error
+	if rc.Offers, err = cfg.ipsecOffers(); err != nil {
+		return reg.Config{}, err
+	}
+	return rc, nil
 }
 
 func callConfig(cfg *Config, ani string, logger *slog.Logger) call.Config {
@@ -398,7 +406,11 @@ func buildStack(ctx context.Context, cfg *Config, link *ATLink, env pdnEnv, logg
 	}
 	logger.Info("IMS domain", "domain", ids.Domain, "smsc_on_sim", card.SMSC() != "", "rtp_iface", iface)
 
-	return newNetStack(iface, regConfig(cfg, ids, imei, ue, pcscf, ani, logger), cardAuth{card},
+	rc, err := regConfig(cfg, ids, imei, ue, pcscf, ani, logger)
+	if err != nil {
+		return nil, err
+	}
+	return newNetStack(iface, rc, cardAuth{card},
 		callConfig(cfg, ani, logger), smsConfig(cfg, ids, card.SMSC(), logger), logger)
 }
 

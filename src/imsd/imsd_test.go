@@ -409,7 +409,10 @@ func TestLoadConfigOperatorSettings(t *testing.T) {
 		cfg.imsAPN() != "ims.operator" || len(cfg.Codecs) != 2 {
 		t.Errorf("loaded: %+v", cfg)
 	}
-	rc := regConfig(cfg, identities{}, cfg.IMEI, netip.MustParseAddr("10.0.0.2"), cfg.pcscfIPs(), "", slog.Default())
+	rc, err := regConfig(cfg, identities{}, cfg.IMEI, netip.MustParseAddr("10.0.0.2"), cfg.pcscfIPs(), "", slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if rc.PCSCF != netip.MustParseAddrPort("192.0.2.28:5070") {
 		t.Errorf("P-CSCF %v", rc.PCSCF)
 	}
@@ -419,8 +422,14 @@ func TestLoadConfigOperatorSettings(t *testing.T) {
 	// Unset: the library's broad default offer and the "ims" APN.
 	if def := defaultConfig(); def.imsAPN() != "ims" {
 		t.Errorf("default ims_apn %q", def.imsAPN())
-	} else if rc := regConfig(def, identities{}, "", netip.MustParseAddr("10.0.0.2"), nil, "", slog.Default()); rc.Offers != nil {
-		t.Errorf("default offers %v", rc.Offers)
+	} else if rc, err := regConfig(def, identities{}, "", netip.MustParseAddr("10.0.0.2"), nil, "", slog.Default()); err != nil || rc.Offers != nil {
+		t.Errorf("default offers %v, %v", rc.Offers, err)
+	}
+	// A list Config.check would refuse is an error here too, not the default offer.
+	bad := defaultConfig()
+	bad.IPsecOffers = []string{"hmac-sha-256/null"}
+	if _, err := regConfig(bad, identities{}, "", netip.MustParseAddr("10.0.0.2"), nil, "", slog.Default()); err == nil {
+		t.Error("regConfig accepted an invalid ipsec_offers")
 	}
 
 	for _, tc := range []struct{ body, field string }{
@@ -434,11 +443,11 @@ func TestLoadConfigOperatorSettings(t *testing.T) {
 		{`{"domain":"-ims.example"}`, "domain"},
 		{`{"smsc":"+44 7700"}`, "smsc"},
 		{`{"smsc":"+1234567890123456"}`, "smsc"},
-		{`{"codecs":["G722"]}`, "codecs"},
+		{`{"codecs":["G722"]}`, "codecs (UCI network_codecs)"},
 		{`{"ims_profile":300}`, "ims_profile"},
 		{`{"ims_apn":"ims,2"}`, "ims_apn"},
 		{`{"ims_apn":"` + strings.Repeat("a.", 50) + `ims"}`, "ims_apn"},
-		{`{"ipsec_offers":["hmac-sha-256/null"]}`, "ipsec_offers"},
+		{`{"ipsec_offers":["hmac-sha-256/null"]}`, "ipsec_offers (UCI ipsec_offer)"},
 		{`{"ipsec_offers":["hmac-md5-96/aes-gcm"]}`, "ipsec_offers"},
 	} {
 		write(tc.body)
