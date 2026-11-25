@@ -10,7 +10,9 @@ config voip 'main'
 	# prefixes such as '+44 +33'.
 	option dial '*'
 	# Country code for numbers dialled with a leading 0 (e.g. 44 for the UK,
-	# 56 for Chile).
+	# 56 for Chile). Only numbers that start with 0 are rewritten; Chile uses
+	# 9-digit national numbers that may be dialled without a 0, in which case
+	# this option does not change them (to verify with the operator).
 	# Filled in by setup from the SIM.
 	option country ''
 	# Codecs offered to the phones, best first.

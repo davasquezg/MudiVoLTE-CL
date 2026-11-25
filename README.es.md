@@ -116,7 +116,7 @@ el estado de la línea:
 ```
 # mudi-volte status
 Service: online, registered for 2m0s
-Number:  +56987654321
+Number:  +569XXXXXXXX
 Network: LTE, IMS on rmnet_data1 (198.51.100.207), P-CSCF 192.0.2.28, 192.0.2.20
 Phones:  phone
 Modem:   External VoLTE mode
@@ -275,9 +275,10 @@ vacía. La configuración está en `/etc/config/mudi-volte`. Cámbiala en la pá
 web, o con `uci` seguido de `mudi-volte restart`:
 
 ```sh
-# Hacer sonar los teléfonos solo para estos llamantes, rechazar a todos los demás:
+# Hacer sonar los teléfonos solo para estos llamantes, rechazar a todos los demás
+# (cambia las X por el número completo):
 uci set mudi-volte.main.incoming=allow
-uci add_list mudi-volte.main.allow='+56912345678'
+uci add_list mudi-volte.main.allow='+569XXXXXXXX'
 # Llamadas salientes solo a Chile y Argentina (el valor por defecto '*' permite cualquier número):
 uci set mudi-volte.main.dial='+56 +54'
 uci commit mudi-volte && mudi-volte restart
