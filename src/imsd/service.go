@@ -568,6 +568,11 @@ func (s *service) waitPDN(ctx context.Context, profile int, call *dataCall) (pdn
 		case <-t.C:
 		}
 	}
+	if errors.Is(last, errIPv6Only) {
+		// Not a transient state: name the cause once, as an error, beside
+		// the session's end (docs/PROTOCOLS.md §2.3, "IPv6").
+		s.log.Error("IMS-PDN: IPv6 only, the line cannot register", "profile", profile, "err", last)
+	}
 	return pdnEnv{}, endPDN, last
 }
 

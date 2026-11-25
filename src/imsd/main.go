@@ -313,23 +313,55 @@ func discoverPDN(ctx context.Context, cfg *Config, link *ATLink, profile int, lo
 	} else {
 		logger.Warn("CGCONTRDP", "profile", profile, "err", err)
 	}
+	auto := func(v string) bool { return v == "" || v == "auto" }
 	iface, localIP, err := findIMSIface(cfg.Interface, info.Local)
 	if err != nil {
+		// The daemon registers over IPv4 only (docs/PROTOCOLS.md §2.3,
+		// "IPv6"). When no interface with IPv4 is found and CGCONTRDP shows
+		// the PDN with a global IPv6 address and no IPv4 one, the PDN is
+		// named as such, unless the config gives the interface or the
+		// address itself. A PDN whose IPv4 address CGCONTRDP does not show
+		// is still found on the interfaces first; link-local alone is no
+		// IPv6 PDN.
+		if info.Local == nil && info.Local6 != nil && info.Local6.IsGlobalUnicast() &&
+			auto(cfg.Interface) && auto(cfg.LocalIPv4) {
+			return pdnEnv{}, fmt.Errorf("the IMS PDN (APN %q) has only the IPv6 address %s in CGCONTRDP (%v): %w",
+				info.APN, info.Local6, err, errIPv6Only)
+		}
 		return pdnEnv{}, fmt.Errorf("IMS PDN interface: %w", err)
 	}
-	if cfg.LocalIPv4 != "" && cfg.LocalIPv4 != "auto" {
+	if !auto(cfg.LocalIPv4) {
 		if localIP = net.ParseIP(cfg.LocalIPv4).To4(); localIP == nil {
 			return pdnEnv{}, fmt.Errorf("local_ipv4 %q is not an address", cfg.LocalIPv4)
 		}
 	}
-	pcscf := cfg.pcscfIPs()
+	pcscf, from := cfg.pcscfIPs(), "the config"
 	if len(pcscf) == 0 {
-		for _, ip := range info.PCSCF {
+		from = "CGCONTRDP"
+		for _, ip := range append(append([]net.IP(nil), info.PCSCF...), info.PCSCF6...) {
 			if !ip.Equal(localIP) {
 				pcscf = append(pcscf, ip)
 			}
 		}
 	}
+	// Our address is IPv4, and the SAs take the family of both ends
+	// (volte/ipsec Set.Validate): an IPv6 P-CSCF is left out, with a line in
+	// the log, and a list of IPv6 ones only is named as such.
+	var pcscf4, pcscf6 []net.IP
+	for _, ip := range pcscf {
+		if ip.To4() != nil {
+			pcscf4 = append(pcscf4, ip)
+		} else {
+			pcscf6 = append(pcscf6, ip)
+		}
+	}
+	if len(pcscf6) > 0 {
+		logger.Info("IMS-PDN: IPv6 P-CSCFs left out, the IMS address is IPv4", "from", from, "pcscf", fmtIPs(pcscf6))
+	}
+	if len(pcscf4) == 0 && len(pcscf6) > 0 {
+		return pdnEnv{}, fmt.Errorf("the P-CSCFs from %s are IPv6 only (%s): %w", from, fmtIPs(pcscf6), errIPv6Only)
+	}
+	pcscf = pcscf4
 	if len(pcscf) == 0 {
 		return pdnEnv{}, errors.New("no P-CSCF found: neither CGCONTRDP nor the config has any")
 	}

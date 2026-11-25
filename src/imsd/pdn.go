@@ -54,7 +54,9 @@ var defaultRouteIface = func() string {
 // CGCONTRDP) it looks for the interface with that address: the rmnet_dataN
 // numbers of the internet and IMS PDNs swap places (§87). Without an address
 // it takes the first rmnet_data* with IPv4 that does not carry the default
-// route.
+// route. A named interface with IPv6 only gives errIPv6Only; in auto mode an
+// rmnet_data* with IPv6 only is just a hint in the error, since it may be
+// another PDN while the IMS one has no address yet.
 func findIMSIface(cfgName string, want net.IP) (string, net.IP, error) {
 	if cfgName != "" && cfgName != "auto" {
 		ip, err := firstIPv4(cfgName)
@@ -68,12 +70,16 @@ func findIMSIface(cfgName string, want net.IP) (string, net.IP, error) {
 		return "", nil, err
 	}
 	internet := defaultRouteIface()
+	var v6 string // the first rmnet_data* off the default route with IPv6 only
 	for _, iface := range ifaces {
 		if !strings.HasPrefix(iface.Name, "rmnet_data") {
 			continue
 		}
 		ip, err := firstIPv4(iface.Name)
 		if err != nil || ip == nil {
+			if v6 == "" && iface.Name != internet && errors.Is(err, errIPv6Only) {
+				v6 = strings.TrimSuffix(err.Error(), ": "+errIPv6Only.Error())
+			}
 			continue
 		}
 		if want != nil {
@@ -90,14 +96,29 @@ func findIMSIface(cfgName string, want net.IP) (string, net.IP, error) {
 	if want != nil {
 		return "", nil, fmt.Errorf("no rmnet_data* has the IMS PDN address %s", want)
 	}
+	// Which rmnet_data* the RG650V uses for an IPv6 PDN has not been seen (to
+	// verify on the router): an IPv6-only one is named, not blamed.
+	if v6 != "" {
+		return "", nil, fmt.Errorf("no rmnet_data* IMS interface with an IPv4 address (%s)", v6)
+	}
 	return "", nil, fmt.Errorf("no rmnet_data* IMS interface with an IPv4 address")
 }
 
+// errIPv6Only marks an IMS PDN, or a P-CSCF list, with IPv6 addresses and no
+// IPv4 one. The daemon registers over IPv4 only (docs/PROTOCOLS.md §2.3,
+// "IPv6"): such a PDN cannot be used, and the error says so in the log and
+// in last_error of `mudi-volte status` instead of a bare "no address".
+var errIPv6Only = errors.New("IMS over IPv6 is not supported: MudiVoLTE registers over IPv4 only")
+
+// firstIPv4 returns the first IPv4 address of the interface. An interface
+// with a global IPv6 address and no IPv4 one gives an error that wraps
+// errIPv6Only; link-local IPv6 alone (every interface has it) does not.
 func firstIPv4(name string) (net.IP, error) {
 	addrs, err := netAddrs(name)
 	if err != nil {
 		return nil, err
 	}
+	var v6 net.IP
 	for _, addr := range addrs {
 		ipNet, ok := addr.(*net.IPNet)
 		if !ok {
@@ -106,15 +127,25 @@ func firstIPv4(name string) (net.IP, error) {
 		if ip4 := ipNet.IP.To4(); ip4 != nil {
 			return ip4, nil
 		}
+		if v6 == nil && ipNet.IP.IsGlobalUnicast() {
+			v6 = ipNet.IP
+		}
+	}
+	if v6 != nil {
+		return nil, fmt.Errorf("%s has only IPv6 (%s), no IPv4 address: %w", name, v6, errIPv6Only)
 	}
 	return nil, fmt.Errorf("%s has no IPv4 address", name)
 }
 
-// pdnInfo is what the modem knows about the active PDN (the IPv4 part).
+// pdnInfo is what the modem knows about the active PDN. Local and PCSCF are
+// the IPv4 addresses the daemon uses; Local6 and PCSCF6 the IPv6 ones, kept
+// apart for the diagnostics of an IPv6-only PDN and the log (§2.3).
 type pdnInfo struct {
-	APN   string
-	Local net.IP
-	PCSCF []net.IP
+	APN    string
+	Local  net.IP
+	PCSCF  []net.IP
+	Local6 net.IP
+	PCSCF6 []net.IP
 }
 
 // parseCGCONTRDP parses a +CGCONTRDP reply (TS 27.007 §10.1.23) by position:
@@ -122,9 +153,10 @@ type pdnInfo struct {
 // A live reply (§75, the DNS addresses replaced with documentation ones):
 // 2,6,"ims","198.51.100.20",,"203.0.113.105","203.0.113.106","192.0.2.20",
 // "192.0.2.28": the gateway is empty, the
-// P-CSCFs come after the DNS servers. There can be several lines (IPv4/IPv6,
-// extra P-CSCF pairs): the IPv4 addresses are collected from all of them,
-// without duplicates, in the modem's order.
+// P-CSCFs come after the DNS servers. There can be several lines (a dual-stack
+// PDN gives an IPv4 line, then an IPv6 one; extra P-CSCF pairs give more
+// pairs): the addresses are collected from all of them, without duplicates,
+// in the modem's order, IPv4 and IPv6 apart.
 func parseCGCONTRDP(out string) pdnInfo {
 	var info pdnInfo
 	seen := map[string]bool{}
@@ -140,36 +172,72 @@ func parseCGCONTRDP(out string) pdnInfo {
 		if len(f) > 2 && info.APN == "" {
 			info.APN = f[2]
 		}
-		if len(f) > 3 && info.Local == nil {
-			info.Local = ipv4Field(f[3])
+		if len(f) > 3 {
+			switch ip := cgcontrdpAddr(f[3]); {
+			case ip == nil:
+			case ip.To4() != nil:
+				if info.Local == nil {
+					info.Local = ip
+				}
+			case info.Local6 == nil:
+				info.Local6 = ip
+			}
 		}
 		for k := 7; k <= 8 && k < len(f); k++ {
-			if ip := ipv4Field(f[k]); ip != nil && !seen[ip.String()] {
-				seen[ip.String()] = true
+			ip := cgcontrdpAddr(f[k])
+			if ip == nil || seen[ip.String()] {
+				continue
+			}
+			seen[ip.String()] = true
+			if ip.To4() != nil {
 				info.PCSCF = append(info.PCSCF, ip)
+			} else {
+				info.PCSCF6 = append(info.PCSCF6, ip)
 			}
 		}
 	}
 	return info
 }
 
-// ipv4Field returns the IPv4 address of a CGCONTRDP field: "a.b.c.d",
-// "a.b.c.d/len" or an address with the mask in dotted form "a.b.c.d.m.m.m.m"
-// (TS 27.007). IPv6 and empty fields give nil.
-func ipv4Field(s string) net.IP {
-	if i := strings.IndexByte(s, '/'); i >= 0 {
+// cgcontrdpAddr returns the address of a CGCONTRDP field: IPv4 as 4 bytes,
+// IPv6 as 16, nil for an empty, unspecified or loopback one. The forms (TS
+// 27.007, +CGPIAF): IPv4 "a.b.c.d", "a.b.c.d/len" or with the mask in dotted
+// form "a.b.c.d.m.m.m.m"; IPv6 in the dot notation, 16 decimal octets
+// "a1.a2.….a16" (32 with the mask after them), or in the colon notation,
+// "2001:db8::1" with "/len" or " mask" after it. Which form the RG650V prints
+// for an IPv6 PDN has not been seen yet (to verify on the router).
+func cgcontrdpAddr(s string) net.IP {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexAny(s, "/ "); i >= 0 {
 		s = s[:i]
 	}
-	parts := strings.Split(s, ".")
-	if len(parts) == 8 {
-		parts = parts[:4]
+	var ip net.IP
+	if strings.Contains(s, ":") {
+		ip = net.ParseIP(s)
+	} else {
+		parts := strings.Split(s, ".")
+		if len(parts) == 8 || len(parts) == 32 { // the address, then its mask
+			parts = parts[:len(parts)/2]
+		}
+		switch len(parts) {
+		case 4:
+			ip = net.ParseIP(strings.Join(parts, "."))
+		case 16:
+			ip = make(net.IP, net.IPv6len)
+			for i, p := range parts {
+				n, err := strconv.Atoi(p)
+				if err != nil || !allDigits(p) || n > 255 {
+					return nil
+				}
+				ip[i] = byte(n)
+			}
+		}
 	}
-	if len(parts) != 4 {
-		return nil
-	}
-	ip := net.ParseIP(strings.Join(parts, ".")).To4()
 	if ip == nil || ip.IsUnspecified() || ip.IsLoopback() {
 		return nil
+	}
+	if ip4 := ip.To4(); ip4 != nil {
+		return ip4
 	}
 	return ip
 }

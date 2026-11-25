@@ -532,9 +532,15 @@ de redes móviles, puede pasar por un relay, con más retardo.
   daemon ahora lee la celda NR y aun así intenta registrarse (si no puede leer
   la celda, se registra con la última que leyó, o sin ella), pero si la red lo
   acepta y las llamadas funcionan está por verificar en el router: no tenemos
-  una red así para probarlo. Si la línea no se levanta en SA, desactiva SA en
-  el módem con `AT+QNWPREFCFG="nr5g_disable_mode",1` (la herramienta AT Command
-  del panel de administración de GL, SIM 1).
+  una red así para probarlo. Si la línea no se levanta en SA, desactiva SA:
+  `mudi-volte setup --no-sa` (guarda el valor del módem y la desinstalación lo
+  restaura), o a mano con `AT+QNWPREFCFG="nr5g_disable_mode",1` (la herramienta
+  AT Command del panel de administración de GL, en la SIM de la línea).
+- IMS solo por IPv4. Si la conexión IMS del operador es solo IPv6, o entrega
+  solo direcciones P-CSCF IPv6, la línea no se registra, y `mudi-volte status`
+  lo indica en "Last error" ("IMS over IPv6 is not supported"). Todavía no se
+  sabe qué operadores chilenos usan IPv6 para IMS. Ver
+  [docs/PROTOCOLS.es.md](docs/PROTOCOLS.es.md#ipv6) §2.3.
 - En iPhone, las llamadas entrantes en segundo plano necesitan la cuenta push
   (ver [Teléfonos en segundo plano](#teléfonos-en-segundo-plano)). Los SMS a un
   iPhone siguen llegando solo mientras Linphone está abierto. Un iPhone
