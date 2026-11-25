@@ -136,3 +136,62 @@ func TestServerChoiceOutsideTheOfferIsRefused(t *testing.T) {
 		t.Errorf("%d SAs installed", n)
 	}
 }
+
+// A kernel without the cipher the network picks does not keep the client
+// from registering: the next attempt offers only the pairs without
+// encryption, and so do the ones after it.
+func TestCipherTheKernelLacksFallsBackToNullEncryption(t *testing.T) {
+	f, r := newFakePCSCF(t), &fakeRunner{fail: "enc cbc(aes)"}
+	f.set(func() {
+		f.secAlgs = "alg=hmac-sha-1-96;prot=esp;mod=trans;ealg=aes-cbc,alg=hmac-md5-96;prot=esp;mod=trans;ealg=null"
+	})
+	c := clientWithOffers(t, f, r, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := c.Register(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	f.mu.Lock()
+	raw := f.held.clientRaw
+	f.mu.Unlock()
+	ms, err := auth.ParseMechanisms(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []Offer
+	for _, m := range ms {
+		got = append(got, Offer{m.Alg, m.Ealg})
+	}
+	if want := []Offer{{"hmac-md5-96", "null"}, {"hmac-sha-1-96", "null"}}; !slices.Equal(got, want) {
+		t.Errorf("Security-Client after the failure %q: offers %v, want %v", raw, got, want)
+	}
+	if b, ok := c.Binding(); !ok || b.Expires == 0 {
+		t.Errorf("not registered: %+v %v", b, ok)
+	}
+	var held int
+	for _, cmd := range r.since(0) {
+		if strings.HasPrefix(cmd, "xfrm state add") && strings.Contains(cmd, "auth-trunc hmac(md5)") && !strings.Contains(cmd, "enc cbc(aes)") {
+			held++
+		}
+	}
+	if held != 4 {
+		t.Errorf("%d SAs with hmac(md5) and no cipher: %v", held, r.since(0))
+	}
+}
+
+// Without a pair free of encryption in the offer there is nothing to fall
+// back to: the failure is reported as it is.
+func TestCipherFailureWithoutNullPairIsReported(t *testing.T) {
+	f, r := newFakePCSCF(t), &fakeRunner{fail: "enc cbc(aes)"}
+	f.set(func() { f.secAlgs = "alg=hmac-md5-96;prot=esp;mod=trans;ealg=aes-cbc" })
+	c := clientWithOffers(t, f, r, []Offer{{"hmac-md5-96", "aes-cbc"}})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := c.Register(ctx); err == nil || !strings.Contains(err.Error(), "installing SAs") {
+		t.Fatalf("Register: %v", err)
+	}
+	if n := len(f.seen()); n != 1 {
+		t.Errorf("%d REGISTER requests, want 1 (no retry without a fallback)", n)
+	}
+}

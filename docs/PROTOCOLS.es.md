@@ -820,7 +820,11 @@ UE                                  P-CSCF (192.0.2.28:5060)
   (16 bytes), `hmac-sha-1-96` IK seguida de 32 bits en cero (20 bytes); `aes-cbc` usa CK
   (16 bytes), `des-ede3-cbc` CK1 ‖ CK2 ‖ CK1 (24 bytes); con `null` no se usa CK. Los pares con
   cifrado aún no se han visto en una red real: requieren los cifradores `cbc(aes)` y
-  `cbc(des3_ede)` del kernel (por verificar en el router).
+  `cbc(des3_ede)` del kernel (por verificar en el router). Si falla la instalación de las SA de
+  un par con cifrado, el cliente deja una advertencia en el log, saca los pares con cifrado de
+  todos los Security-Client siguientes y se registra de nuevo de inmediato
+  (`reg.Client.dropCiphers`); si la oferta no tiene ningún par sin cifrado, el error se informa
+  tal cual.
 - Modo: transporte (no túnel).
 - Cada plantilla de estado y de política tiene `reqid 0x4d554449` (la palabra ASCII
   `MUDI`). Es una etiqueta de propiedad compartida por todas las SA de MudiVoLTE; el SPI sigue

@@ -820,7 +820,10 @@ UE                                  P-CSCF (192.0.2.28:5060)
   IK (16 bytes), `hmac-sha-1-96` IK followed by 32 zero bits (20 bytes); `aes-cbc` takes CK
   (16 bytes), `des-ede3-cbc` CK1 ‖ CK2 ‖ CK1 (24 bytes); with `null` CK is not used. The pairs with
   encryption have not been seen on a live network yet: they need the kernel's `cbc(aes)` and
-  `cbc(des3_ede)` ciphers (to verify on the router).
+  `cbc(des3_ede)` ciphers (to verify on the router). When installing the SAs of a pair with
+  encryption fails, the client logs a warning, leaves the pairs with encryption out of every
+  later Security-Client and registers again at once (`reg.Client.dropCiphers`); with no pair
+  without encryption in the offer the error is reported as it is.
 - Mode: transport (not tunnel).
 - Every state and policy template has `reqid 0x4d554449` (the ASCII word
   `MUDI`). It is an ownership tag shared by all MudiVoLTE SAs; the SPI still

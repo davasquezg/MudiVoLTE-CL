@@ -33,7 +33,9 @@ type Offer struct{ Alg, Ealg string }
 // first: every pair the IPsec layer installs (TS 33.203 Annex H and I). The
 // first is the only pair offered before, and the one the tested network
 // chose; the pairs with encryption come last and need the kernel's cbc(aes)
-// and cbc(des3_ede) ciphers when a P-CSCF picks them.
+// and cbc(des3_ede) ciphers when a P-CSCF picks them. Should the kernel fail
+// to install the one picked, the client offers only the pairs without
+// encryption from then on (see dropCiphers).
 var DefaultOffers = []Offer{
 	{"hmac-md5-96", "null"},
 	{"hmac-sha-1-96", "null"},
@@ -42,6 +44,9 @@ var DefaultOffers = []Offer{
 	{"hmac-md5-96", "des-ede3-cbc"},
 	{"hmac-sha-1-96", "des-ede3-cbc"},
 }
+
+// encrypts reports whether the pair has an encryption algorithm.
+func (o Offer) encrypts() bool { return o.Ealg != "" && o.Ealg != "null" }
 
 // String renders the pair as ParseOffer reads it: "alg/ealg".
 func (o Offer) String() string { return o.Alg + "/" + o.Ealg }
@@ -202,6 +207,9 @@ type Client struct {
 	rescheduled chan struct{} // a NOTIFY moved when the subscription or the binding is due
 	reauthAt    time.Time     // when a shortening last made us refresh (see shorten)
 	pcscfs      []netip.AddrPort
+	// noCipher leaves the pairs with encryption out of every later offer,
+	// once the kernel failed to install one the network chose (dropCiphers).
+	noCipher bool
 }
 
 // New creates a client. inbound receives every request other than reg-event
@@ -300,6 +308,10 @@ func randPort() uint16 {
 // for it.
 var errTooBrief = errors.New("423 Interval Too Brief")
 
+// errCipher is a pair with encryption that the network chose and the kernel
+// did not install: the next attempt offers only the pairs without one.
+var errCipher = errors.New("the encryption the network chose could not be installed")
+
 // Register performs a full initial registration. A registration we hold is
 // replaced rather than dropped first: the server port and its listener stay,
 // so the Contact of running dialogs keeps reaching us (TS 33.203 §7.1,
@@ -363,7 +375,7 @@ func (c *Client) tryPCSCFs(ctx context.Context, cur *session) (Binding, error) {
 				return b, nil
 			}
 			c.remove(s, cur)
-			if errors.Is(err, errTooBrief) && !again {
+			if (errors.Is(err, errTooBrief) || errors.Is(err, errCipher)) && !again {
 				continue
 			}
 			errs = append(errs, fmt.Errorf("P-CSCF %s: %w", pcscf, err))
@@ -411,6 +423,7 @@ func (c *Client) offer(s *session) error {
 		}
 		taken = slices.Contains(ports, ue.PortC)
 	}
+	noCipher := c.noCipher
 	c.mu.Unlock()
 	var err error
 	if ue.SPIc, err = ipsec.AllocSPI(spis...); err != nil {
@@ -421,6 +434,9 @@ func (c *Client) offer(s *session) error {
 	}
 	s.client = s.client[:0]
 	for _, o := range c.cfg.Offers {
+		if noCipher && o.encrypts() {
+			continue
+		}
 		s.client = append(s.client, auth.Mechanism{Name: auth.MechIPsec3GPP, Alg: o.Alg, Ealg: o.Ealg,
 			Prot: "esp", Mode: "trans", SPIc: ue.SPIc, SPIs: ue.SPIs, PortC: ue.PortC, PortS: ue.PortS, Q: -1})
 	}
@@ -592,6 +608,14 @@ func (c *Client) secure(ctx context.Context, s *session, res *sip.Response, akaR
 		err = s.sa.Install(ctx, c.cfg.IPsec)
 	}
 	if err != nil {
+		if (Offer{chosen.Alg, chosen.Ealg}).encrypts() && c.dropCiphers() {
+			// The kernel may lack cbc(aes) or cbc(des3_ede) (not verified on
+			// the router): rather than retry the same offer for ever, the
+			// next attempt offers the pairs without encryption only.
+			c.cfg.Log.Warn("could not install the encryption the network chose, offering only pairs without encryption from now on",
+				"alg", chosen.Alg, "ealg", chosen.Ealg, "err", err)
+			return fmt.Errorf("installing SAs: %w: %w", errCipher, err)
+		}
 		return fmt.Errorf("installing SAs: %w", err)
 	}
 	s.installed = true
@@ -601,6 +625,19 @@ func (c *Client) secure(ctx context.Context, s *session, res *sip.Response, akaR
 		return fmt.Errorf("protected connection: %w", err)
 	}
 	return nil
+}
+
+// dropCiphers makes every later offer leave out the pairs with encryption,
+// and reports whether that changes anything: false when they are left out
+// already or when no pair without encryption remains to offer.
+func (c *Client) dropCiphers() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.noCipher || !slices.ContainsFunc(c.cfg.Offers, func(o Offer) bool { return !o.encrypts() }) {
+		return false
+	}
+	c.noCipher = true
+	return true
 }
 
 // listen opens the protected server port unless it is open already.
