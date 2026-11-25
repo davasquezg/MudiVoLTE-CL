@@ -5,12 +5,19 @@
 #   wget -qO- @BASE_URL@/install.sh | sh
 # or with the package already copied to the router:
 #   sh install.sh /tmp/mudi-volte_@VERSION@_aarch64_cortex-a53.ipk
+# In another language (the translation package, then the setup in it):
+#   wget -qO- @BASE_URL@/install.sh | MUDI_VOLTE_LANG=es sh
+# With the packages copied to the router, install the translation by hand:
+#   opkg install /tmp/mudi-volte-i18n-es_@VERSION@_all.ipk
 set -e
 
 VERSION=@VERSION@
 BASE_URL=${MUDI_VOLTE_URL:-@BASE_URL@}
 IPK=mudi-volte_${VERSION}_aarch64_cortex-a53.ipk
 SHA256=@SHA256@
+# The translation packages of this release: LANG:SHA256, space-separated.
+I18N_SUMS='@I18N_SUMS@'
+LANG_WANTED=${MUDI_VOLTE_LANG:-}
 
 fail() {
 	echo "mudi-volte install: $*" >&2
@@ -18,6 +25,14 @@ fail() {
 }
 
 [ "$(id -u)" = 0 ] || fail "run this as root on the router"
+case "$LANG_WANTED" in
+'' | en) LANG_WANTED= LANG_SUM= ;;
+*[!a-z_]*) fail "bad language: $LANG_WANTED" ;;
+*)
+	LANG_SUM=$(echo "$I18N_SUMS" | tr ' ' '\n' | sed -n "s/^$LANG_WANTED://p")
+	[ -n "$LANG_SUM" ] || fail "no translation for language $LANG_WANTED in this release (available: $I18N_SUMS)"
+	;;
+esac
 grep -q E5800 /proc/device-tree/model 2>/dev/null || fail "this installer is for the GL.iNet Mudi 7 (GL-E5800)"
 
 if [ -n "${1:-}" ]; then
@@ -42,6 +57,20 @@ else
 	opkg install --force-downgrade "$file"
 fi
 [ -n "${1:-}" ] || rm -f "$file"
+
+if [ -n "$LANG_WANTED" ]; then
+	lipk=mudi-volte-i18n-${LANG_WANTED}_${VERSION}_all.ipk
+	lfile=/tmp/$lipk
+	trap 'rm -f "$file" "$lfile"' EXIT
+	echo "Downloading $lipk ..."
+	wget -q -O "$lfile" "$BASE_URL/$lipk" || uclient-fetch -q -O "$lfile" "$BASE_URL/$lipk" ||
+		fail "download failed: $BASE_URL/$lipk"
+	echo "$LANG_SUM  $lfile" | sha256sum -c - >/dev/null 2>&1 ||
+		fail "checksum mismatch: $lfile is damaged or belongs to another release"
+	# The first install sets mudi-volte.main.lang, so the setup below speaks it.
+	opkg install --force-reinstall "$lfile"
+	rm -f "$lfile"
+fi
 
 echo
 if [ "$(uci -q get mudi-volte.main.enabled)" = 1 ]; then

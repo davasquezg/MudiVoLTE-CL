@@ -1,0 +1,10 @@
+#!/bin/sh
+# mudi-volte-i18n-@LANG@ removed: back to English where it set the language.
+[ -n "${IPKG_INSTROOT:-}" ] && exit 0
+[ "$1" = upgrade ] && exit 0
+if [ "$(uci -q get mudi-volte.main.lang)" = @LANG@ ]; then
+	uci -q delete mudi-volte.main.lang && uci -q commit mudi-volte
+fi
+rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
+ubus call mudi-screen reload >/dev/null 2>&1
+exit 0

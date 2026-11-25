@@ -1,0 +1,47 @@
+# Spanish for the MudiVoLTE app on the router screen (MudiScreen catalog format: English<TAB>translation; {} matches any text)
+# Español para la app de MudiVoLTE en la pantalla del router (formato de catálogo de MudiScreen)
+Calls are on	Llamadas activas
+Calls: connecting	Llamadas: conectando
+Calls are down	Llamadas caídas
+service stopped	servicio detenido
+missed: {}	perdidas: {}
+Missed calls: {}	Llamadas perdidas: {}
+Calls (VoLTE)	Llamadas (VoLTE)
+Status	Estado
+online	en línea
+Online for	En línea desde hace
+Network	Red
+Phones	Teléfonos
+none	ninguno
+Missed calls ({})	Llamadas perdidas ({})
+Clear the list	Borrar la lista
+Clear the missed calls?	¿Borrar las llamadas perdidas?
+Clear	Borrar
+No missed calls	No hay llamadas perdidas
+Cleared	Borradas
+Missed call	Llamada perdida
+starting	iniciando
+waiting for the modem and LTE	esperando el módem y LTE
+opening the IMS connection	abriendo la conexión IMS
+registering with the operator	registrándose con el operador
+recovering after a failure	recuperándose tras una falla
+restarting the radio	reiniciando la radio
+the radio is off (airplane mode)	la radio está apagada (modo avión)
+under a minute	menos de un minuto
+{} d {} h	{} d {} h
+{} h {} min	{} h {} min
+{} min	{} min
+hidden number	número oculto
+Incoming call	Llamada entrante
+Answer it on a phone	Contéstala en un teléfono
+In a call · {}	En llamada · {}
+Calling…	Llamando…
+Call	Llamada
+Line	Línea
+Incoming from	Entrante de
+Answered on	Contestada en
+Outgoing to	Saliente a
+From the phone	Desde el teléfono
+Between the phones	Entre los teléfonos
+Ringing	Sonando
+Talking	Hablando

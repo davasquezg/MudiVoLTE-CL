@@ -19,7 +19,59 @@ local SETUP_LOG = "/tmp/mudi-volte-setup.log"
 local SETUP_STATE = "/tmp/mudi-volte-setup.state"
 local PUSH_FILE = "/etc/mudi-volte/push.json"
 
+local I18N_DIR = "/usr/share/mudi-volte/i18n"
+
 local M = {}
+
+-- Translations (package mudi-volte-i18n-<lang>, made from package/po by
+-- package/toolchain/i18n.py): /usr/share/mudi-volte/i18n/<lang>.json maps
+-- the English texts to the language's. The messages of this module are in
+-- the language of mudi-volte.main.lang, English when it is unset or has no
+-- catalog; the page asks for the catalog it shows (get_i18n).
+local function valid_lang(lang)
+    return type(lang) == "string" and lang:match("^[a-z][a-z_]*$") ~= nil and lang ~= "en"
+end
+
+local function load_catalog(lang)
+    if not valid_lang(lang) then
+        return nil
+    end
+    local f = io.open(I18N_DIR .. "/" .. lang .. ".json", "r")
+    if not f then
+        return nil
+    end
+    local ok, t = pcall(cjson.decode, f:read("*a"))
+    f:close()
+    return ok and type(t) == "table" and t or nil
+end
+
+local catalog -- false: none; loaded once per request
+local function T(fmt, ...)
+    if catalog == nil then
+        catalog = load_catalog(uci.cursor():get("mudi-volte", "main", "lang")) or false
+    end
+    local s = catalog and catalog[fmt] or fmt
+    if select("#", ...) > 0 then
+        return s:format(...)
+    end
+    return s
+end
+
+-- The languages with a catalog on the router.
+local function languages()
+    local list = {}
+    local p = io.popen("ls " .. I18N_DIR .. " 2>/dev/null")
+    if p then
+        for name in p:lines() do
+            local lang = name:match("^([a-z][a-z_]*)%.json$")
+            if lang then
+                list[#list + 1] = lang
+            end
+        end
+        p:close()
+    end
+    return list
+end
 
 local function readfile(path)
     local f = io.open(path, "r")
@@ -67,7 +119,7 @@ local function result(out, rc)
     if rc == 0 then
         return { ok = true, output = trim(out) }
     end
-    return { ok = false, error = trim(out) ~= "" and trim(out) or ("exit code " .. rc) }
+    return { ok = false, error = trim(out) ~= "" and trim(out) or T("exit code %d", rc) }
 end
 
 local function decode(s)
@@ -164,6 +216,24 @@ end
 
 --[[
     @method-type: call
+    @method-name: get_i18n
+    @method-desc: The texts of the page in a language: English text → translation.
+
+    @in  string  lang     The language, e.g. "es".
+    @out string  lang     The language of the catalog, "" when there is none.
+    @out object  strings  English text → translation.
+--]]
+function M.get_i18n(params)
+    local lang = type(params) == "table" and params.lang or nil
+    local strings = load_catalog(lang)
+    if not strings then
+        return { lang = "", strings = {} }
+    end
+    return { lang = lang, strings = strings }
+end
+
+--[[
+    @method-type: call
     @method-name: get_status
     @method-desc: The state of the line, missed calls, phones and settings.
 
@@ -174,6 +244,8 @@ end
     @out array   phones      Phone accounts: user, ext.
     @out object  settings    incoming, allow, dial, country, ring_sec, sms, encryption.
     @out object  push        login, password_set, phones: the account for pushes and the phones it can wake.
+    @out string  lang        The language set in mudi-volte.main.lang, "" for the panel's.
+    @out array   langs       The languages with a catalog on the router (packages mudi-volte-i18n-*).
 --]]
 function M.get_status()
     local c = uci.cursor()
@@ -186,7 +258,9 @@ function M.get_status()
         settings = settings(c),
         push = push_info(c),
         phones = phones(c),
-        missed = missed()
+        missed = missed(),
+        lang = c:get("mudi-volte", "main", "lang") or "",
+        langs = languages()
     }
     local st = decode(readfile(STATE))
     if type(st) == "table" then
@@ -222,7 +296,7 @@ end
 function M.get_phone(params)
     local name = params and params.name
     if not valid_name(name) then
-        return { ok = false, error = "bad phone name" }
+        return { ok = false, error = T("bad phone name") }
     end
     local c = uci.cursor()
     local res = { ok = false, user = name, domain = lan_ip(c) }
@@ -230,12 +304,11 @@ function M.get_phone(params)
     local port = c:get("mudi-volte", "main", "port") or "5060"
     local tls_port = c:get("mudi-volte", "main", "tls_port") or "5061"
     if c:get("mudi-volte", "main", "encryption") == "0" then
-        res.transport = "UDP on port " .. port
+        res.transport = T("UDP on port %s", port)
     elseif c:get("mudi-volte", "main", "plain") == "0" then
-        res.transport = "TLS on port " .. tls_port .. " with SRTP media encryption (SIP without encryption is off)"
+        res.transport = T("TLS on port %s with SRTP media encryption (SIP without encryption is off)", tls_port)
     else
-        res.transport = "TLS on port " .. tls_port ..
-            " with SRTP media encryption, or UDP on port " .. port .. " without encryption"
+        res.transport = T("TLS on port %s with SRTP media encryption, or UDP on port %s without encryption", tls_port, port)
     end
     c:foreach("mudi-volte", "phone", function(s)
         if s.user == name then
@@ -243,7 +316,7 @@ function M.get_phone(params)
         end
     end)
     if not res.ok then
-        res.error = "no such phone"
+        res.error = T("no such phone")
         return res
     end
     local url, rc = run(CLI, "phone", "url", name)
@@ -261,7 +334,7 @@ end
 function M.add_phone(params)
     local name = params and params.name
     if not valid_name(name) then
-        return { ok = false, error = "Phone name: up to 32 letters, digits, dots, dashes or underscores." }
+        return { ok = false, error = T("Phone name: up to 32 letters, digits, dots, dashes or underscores.") }
     end
     return result(run(CLI, "phone", "add", name))
 end
@@ -269,7 +342,7 @@ end
 function M.del_phone(params)
     local name = params and params.name
     if not valid_name(name) then
-        return { ok = false, error = "bad phone name" }
+        return { ok = false, error = T("bad phone name") }
     end
     return result(run(CLI, "phone", "del", name))
 end
@@ -277,7 +350,7 @@ end
 function M.screen_phone(params)
     local name = params and params.name
     if not valid_name(name) then
-        return { ok = false, error = "bad phone name" }
+        return { ok = false, error = T("bad phone name") }
     end
     return result(run(CLI, "phone", "screen", name))
 end
@@ -297,18 +370,18 @@ end
 --]]
 function M.set_config(params)
     if type(params) ~= "table" then
-        return { ok = false, error = "no settings" }
+        return { ok = false, error = T("no settings") }
     end
     local incoming = params.incoming
     if incoming ~= "all" and incoming ~= "allow" then
-        return { ok = false, error = "Who may call: all or allow" }
+        return { ok = false, error = T("Who may call: all or allow") }
     end
     local allow = {}
     for _, v in ipairs(type(params.allow) == "table" and params.allow or {}) do
         v = trim(v)
         if v ~= "" then
             if not v:match("^%+?[%d ]+$") or #v < 3 or #v > 20 then
-                return { ok = false, error = "Allowed caller " .. v .. ": a phone number, e.g. +447700900123" }
+                return { ok = false, error = T("Allowed caller %s: a phone number, e.g. +447700900123", v) }
             end
             allow[#allow + 1] = v
         end
@@ -320,17 +393,17 @@ function M.set_config(params)
     if dial ~= "*" then
         for p in dial:gmatch("%S+") do
             if not p:match("^%+?%d+$") then
-                return { ok = false, error = "Outgoing: * or prefixes such as +44 +33" }
+                return { ok = false, error = T("Outgoing: * or prefixes such as +44 +33") }
             end
         end
     end
     local country = trim(params.country)
     if country ~= "" and (not country:match("^%d+$") or #country > 4) then
-        return { ok = false, error = "Country code: up to 4 digits, e.g. 44" }
+        return { ok = false, error = T("Country code: up to 4 digits, e.g. 44") }
     end
     local ring = tonumber(params.ring_sec)
     if not ring or ring < 10 or ring > 120 then
-        return { ok = false, error = "Ring time: 10 to 120 seconds" }
+        return { ok = false, error = T("Ring time: 10 to 120 seconds") }
     end
     local c = uci.cursor()
     c:set("mudi-volte", "main", "incoming", incoming)
@@ -361,7 +434,7 @@ end
 --]]
 function M.set_push(params)
     if type(params) ~= "table" then
-        return { ok = false, error = "no settings" }
+        return { ok = false, error = T("no settings") }
     end
     local login = (trim(params.login):gsub("@sip%.linphone%.org$", ""))
     local pass = type(params.password) == "string" and params.password or ""
@@ -371,14 +444,14 @@ function M.set_push(params)
         c:delete("mudi-volte", "main", "push_password")
     else
         if #login > 64 or not login:match("^[%w%.%_%+%-]+$") then
-            return { ok = false, error = "Login: the name of the linphone.org account, letters, digits, dots, dashes, underscores or plus" }
+            return { ok = false, error = T("Login: the name of the linphone.org account, letters, digits, dots, dashes, underscores or plus") }
         end
         local saved = c:get("mudi-volte", "main", "push_password") or ""
         if pass == "" and (saved == "" or login ~= (c:get("mudi-volte", "main", "push_login") or "")) then
-            return { ok = false, error = "Enter the password of the linphone.org account" }
+            return { ok = false, error = T("Enter the password of the linphone.org account") }
         end
         if #pass > 128 or pass:find("%c") then
-            return { ok = false, error = "Password: up to 128 characters, no control characters" }
+            return { ok = false, error = T("Password: up to 128 characters, no control characters") }
         end
         c:set("mudi-volte", "main", "push_login", login)
         if pass ~= "" then

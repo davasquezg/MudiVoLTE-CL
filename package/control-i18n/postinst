@@ -1,0 +1,13 @@
+#!/bin/sh
+# mudi-volte-i18n-@LANG@: the first install makes @LANG@ the language of the
+# command line tool and of the GL admin panel page, unless one is set
+# (uci set mudi-volte.main.lang=en goes back to English). LuCI follows its own
+# language setting, MudiScreen the one on the screen (Settings > Language).
+[ -n "${IPKG_INSTROOT:-}" ] && exit 0
+if [ -z "$(uci -q get mudi-volte.main.lang)" ] && uci -q get mudi-volte.main >/dev/null; then
+	uci -q set mudi-volte.main.lang=@LANG@ && uci -q commit mudi-volte
+fi
+# LuCI reads its catalogs anew; MudiScreen rereads its app directories.
+rm -rf /tmp/luci-indexcache* /tmp/luci-modulecache
+ubus call mudi-screen reload >/dev/null 2>&1
+exit 0

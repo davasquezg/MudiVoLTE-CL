@@ -9,6 +9,35 @@
 (function () {
 	'use strict';
 
+	// Translations (package mudi-volte-i18n-<lang>, made from package/po by
+	// package/toolchain/i18n.py): T(text, args...) is the text in the page's
+	// language, English without a catalog; %s and %d take the arguments in
+	// order, %% is a percent sign. NT(text) only marks a text for the
+	// catalog: it goes through T where it is shown. The language is
+	// mudi-volte.main.lang when set, else the panel's (its vue-i18n locale)
+	// or the browser's, when the router has a catalog for it.
+	var catalog = {};
+
+	function T(s) {
+		var args = arguments, i = 1;
+		var t = Object.prototype.hasOwnProperty.call(catalog, s) ? catalog[s] : s;
+		return String(t).replace(/%[sd%]/g, function (p) {
+			return p === '%%' ? '%' : (i < args.length ? String(args[i++]) : p);
+		});
+	}
+
+	function NT(s) {
+		return s;
+	}
+
+	function pageLang(vm, st) {
+		var langs = st && Array.isArray(st.langs) ? st.langs : [];
+		var want = (st && st.lang) || (vm.$i18n && vm.$i18n.locale) ||
+			(typeof navigator !== 'undefined' && navigator.language) || '';
+		want = String(want).toLowerCase().replace(/[-_].*$/, '');
+		return langs.indexOf(want) >= 0 ? want : '';
+	}
+
 	var STYLE_ID = 'mudi-volte-style';
 	var CSS = [
 		'.mudi-volte .gl-card-wrapper{margin-bottom:16px}',
@@ -56,38 +85,39 @@
 	].join('\n');
 
 	var phases = {
-		starting: 'starting',
-		modem: 'waiting for the modem and 4G',
-		pdn: 'opening the connection to the operator',
-		registering: 'registering with the operator',
-		recovering: 'recovering after a failure',
-		'radio-restart': 'restarting the radio',
-		'radio-off': 'the radio is off (airplane mode)',
-		stopped: 'stopped'
+		starting: NT('starting'),
+		modem: NT('waiting for the modem and 4G'),
+		pdn: NT('opening the connection to the operator'),
+		registering: NT('registering with the operator'),
+		recovering: NT('recovering after a failure'),
+		'radio-restart': NT('restarting the radio'),
+		'radio-off': NT('the radio is off (airplane mode)'),
+		stopped: NT('stopped')
 	};
 
 	var missedReasons = {
-		'no-phone': 'No phone was connected',
-		'no-answer': 'Nobody answered',
-		'caller-hung-up': 'The caller hung up before the answer',
-		declined: 'Declined on a phone',
-		busy: 'A phone was busy',
-		'line-busy': 'The line was busy with another call',
-		'not-allowed': 'Not in the list of allowed callers',
-		error: 'Error, see the service log'
+		'no-phone': NT('No phone was connected'),
+		'no-answer': NT('Nobody answered'),
+		'caller-hung-up': NT('The caller hung up before the answer'),
+		declined: NT('Declined on a phone'),
+		busy: NT('A phone was busy'),
+		'line-busy': NT('The line was busy with another call'),
+		'not-allowed': NT('Not in the list of allowed callers'),
+		error: NT('Error, see the service log')
 	};
 
-	// The background runs of setup and give_back, as the page tells them.
+	// The background runs of setup and give_back, as the page tells them;
+	// failed takes the reason (%s).
 	var jobTexts = {
 		setup: {
-			running: 'If the router restarts, reconnect to its Wi-Fi in 2-3 minutes and open this page again.',
-			restarting: 'The router restarts now: reconnect to its Wi-Fi in 2-3 minutes and open this page again.',
-			failed: 'Setup failed: '
+			running: NT('If the router restarts, reconnect to its Wi-Fi in 2-3 minutes and open this page again.'),
+			restarting: NT('The router restarts now: reconnect to its Wi-Fi in 2-3 minutes and open this page again.'),
+			failed: NT('Setup failed: %s')
 		},
 		give_back: {
-			running: 'Giving VoLTE back to the modem. Once the modem has taken its settings, the router restarts.',
-			restarting: 'The router restarts with the modem\'s own VoLTE. Reconnect in 2-3 minutes.',
-			failed: 'VoLTE is not given back to the modem: '
+			running: NT('Giving VoLTE back to the modem. Once the modem has taken its settings, the router restarts.'),
+			restarting: NT("The router restarts with the modem's own VoLTE. Reconnect in 2-3 minutes."),
+			failed: NT('VoLTE is not given back to the modem: %s')
 		}
 	};
 
@@ -109,14 +139,14 @@
 	// ("mudi-volte: ..."), or its exit code.
 	function jobError(log, code) {
 		var lines = String(log || '').split('\n').filter(function (l) { return /^mudi-volte: /.test(l); });
-		return lines.length ? lines[lines.length - 1].replace(/^mudi-volte: /, '') : 'exit code ' + code;
+		return lines.length ? lines[lines.length - 1].replace(/^mudi-volte: /, '') : T('exit code %s', code);
 	}
 
 	// act runs an action that answers {ok, error}: an error becomes a rejection.
 	function act(method, params) {
 		return rpc(method, params).then(function (res) {
 			if (!res || res.ok === false)
-				throw new Error((res && res.error) || 'failed');
+				throw new Error((res && res.error) || T('failed'));
 			return res;
 		});
 	}
@@ -131,12 +161,12 @@
 		if (isNaN(s))
 			return '';
 		if (s < 60)
-			return s + ' s';
+			return T('%d s', s);
 		if (s < 3600)
-			return Math.floor(s / 60) + ' min';
+			return T('%d min', Math.floor(s / 60));
 		if (s < 86400)
-			return Math.floor(s / 3600) + ' h ' + Math.floor(s % 3600 / 60) + ' min';
-		return Math.floor(s / 86400) + ' d ' + Math.floor(s % 86400 / 3600) + ' h';
+			return T('%d h %d min', Math.floor(s / 3600), Math.floor(s % 3600 / 60));
+		return T('%d d %d h', Math.floor(s / 86400), Math.floor(s % 86400 / 3600));
 	}
 
 	function injectStyle() {
@@ -165,7 +195,8 @@
 				confirm: null, // {text, action}
 				log: '',
 				logShown: false,
-				job: null // the background run of setup or give_back: {action, state, log, error}
+				job: null, // the background run of setup or give_back: {action, state, log, error}
+				lang: '' // the language of the catalog in use, '' for English
 			};
 		},
 
@@ -185,9 +216,33 @@
 		},
 
 		methods: {
+			// loadLang fetches the catalog of a language once, then draws the
+			// page again in it; '' goes back to English.
+			loadLang: function (lang) {
+				var self = this;
+				if (lang === this.lang || lang === this.langLoading)
+					return;
+				if (!lang) {
+					catalog = {};
+					this.lang = '';
+					return;
+				}
+				this.langLoading = lang;
+				rpc('get_i18n', { lang: lang }).then(function (res) {
+					if (res && res.lang === lang && res.strings && typeof res.strings === 'object') {
+						catalog = res.strings;
+						self.lang = lang;
+						self.$forceUpdate();
+					}
+				}).catch(function () {}).then(function () {
+					self.langLoading = null;
+				});
+			},
+
 			refresh: function () {
 				var self = this;
 				return rpc('get_status').then(function (st) {
+					self.loadLang(pageLang(self, st));
 					self.status = st;
 					self.loaded = true;
 					if (!self.form && st && st.settings)
@@ -221,7 +276,7 @@
 
 			fail: function (e) {
 				this.$message.closeAll();
-				this.$message.error(String((e && e.message) || e || 'failed'));
+				this.$message.error(String((e && e.message) || e || T('failed')));
 			},
 
 			done: function (text) {
@@ -236,7 +291,7 @@
 			clearMissed: function () {
 				var self = this;
 				act('clear_missed').then(function () {
-					self.done('The list is empty.');
+					self.done(T('The list is empty.'));
 					self.refresh();
 				}).catch(this.fail);
 			},
@@ -265,14 +320,14 @@
 			screenPhone: function (user) {
 				var self = this;
 				act('screen_phone', { name: user }).then(function (res) {
-					self.done(res.output || 'Shown on the router\'s display.');
+					self.done(res.output || T("Shown on the router's display."));
 				}).catch(this.fail);
 			},
 
 			addPhone: function () {
 				var name = (this.newPhone || '').trim();
 				if (!/^[A-Za-z0-9._-]{1,32}$/.test(name)) {
-					this.fail('Phone name: up to 32 letters, digits, dots, dashes or underscores.');
+					this.fail(T('Phone name: up to 32 letters, digits, dots, dashes or underscores.'));
 					return;
 				}
 				var self = this;
@@ -290,10 +345,10 @@
 
 			delPhone: function (user) {
 				var self = this;
-				this.ask('Remove the phone "' + user + '"? It can no longer sign in.', function () {
+				this.ask(T('Remove the phone "%s"? It can no longer sign in.', user), function () {
 					self.busy = true;
 					act('del_phone', { name: user }).then(function () {
-						self.done('Removed.');
+						self.done(T('Removed.'));
 						return self.refresh();
 					}).catch(self.fail).then(function () { self.busy = false; });
 				});
@@ -313,7 +368,7 @@
 				};
 				this.saving = true;
 				act('set_config', params).then(function () {
-					self.done('Saved. The service restarts: calls are offline for about 10 seconds.');
+					self.done(T('Saved. The service restarts: calls are offline for about 10 seconds.'));
 					self.form = null;
 					return self.refresh();
 				}).catch(this.fail).then(function () { self.saving = false; });
@@ -323,12 +378,12 @@
 				var f = this.pushForm, self = this;
 				var login = (f.login || '').trim().replace(/@sip\.linphone\.org$/, '');
 				if (!/^[A-Za-z0-9._+-]{1,64}$/.test(login)) {
-					this.fail('Login: the name of the linphone.org account, without @sip.linphone.org.');
+					this.fail(T('Login: the name of the linphone.org account, without @sip.linphone.org.'));
 					return;
 				}
 				this.saving = true;
 				act('set_push', { login: login, password: f.password || '' }).then(function () {
-					self.done('Saved. The service restarts: calls are offline for about 10 seconds.');
+					self.done(T('Saved. The service restarts: calls are offline for about 10 seconds.'));
 					self.pushForm = null;
 					return self.refresh();
 				}).catch(this.fail).then(function () { self.saving = false; });
@@ -336,10 +391,10 @@
 
 			pushOff: function () {
 				var self = this;
-				this.ask('Turn pushes off? iPhones then get calls only while Linphone is open, Android phones while its service runs.', function () {
+				this.ask(T('Turn pushes off? iPhones then get calls only while Linphone is open, Android phones while its service runs.'), function () {
 					self.saving = true;
 					act('set_push', { login: '' }).then(function () {
-						self.done('Pushes off. The service restarts: calls are offline for about 10 seconds.');
+						self.done(T('Pushes off. The service restarts: calls are offline for about 10 seconds.'));
 						self.pushForm = null;
 						return self.refresh();
 					}).catch(self.fail).then(function () { self.saving = false; });
@@ -349,21 +404,21 @@
 			restart: function () {
 				var self = this;
 				act('restart').then(function () {
-					self.done('Restarting: calls are offline for about 10 seconds.');
+					self.done(T('Restarting: calls are offline for about 10 seconds.'));
 				}).catch(this.fail);
 			},
 
 			showLog: function () {
 				var self = this;
 				rpc('get_log').then(function (res) {
-					self.log = (res && res.log) || 'The log is empty.';
+					self.log = (res && res.log) || T('The log is empty.');
 					self.logShown = true;
 				}).catch(this.fail);
 			},
 
 			startSetup: function () {
 				var self = this;
-				this.ask('The modem\'s own VoLTE gets switched off and the router restarts once: Wi-Fi and the internet are down for 2-3 minutes. Continue?', function () {
+				this.ask(T("The modem's own VoLTE gets switched off and the router restarts once: Wi-Fi and the internet are down for 2-3 minutes. Continue?"), function () {
 					act('setup').then(function () {
 						self.watchJob('setup');
 					}).catch(self.fail);
@@ -372,7 +427,7 @@
 
 			giveBack: function () {
 				var self = this;
-				this.ask('Give VoLTE back to the modem and restart the router? Calls through this router stop until you run the setup again.', function () {
+				this.ask(T('Give VoLTE back to the modem and restart the router? Calls through this router stop until you run the setup again.'), function () {
 					act('give_back').then(function () {
 						self.watchJob('give_back');
 					}).catch(self.fail);
@@ -404,7 +459,7 @@
 						} else {
 							job.state = 'failed';
 							job.error = jobError(job.log, state);
-							self.fail(jobTexts[action].failed + job.error);
+							self.fail(T(jobTexts[action].failed, job.error));
 							self.refresh();
 						}
 					}).catch(function () {}); // the router is restarting
@@ -450,62 +505,61 @@
 				var row = function (label, value) { rows.push(h('tr', [h('td', label), h('td', [value])])); };
 				var state;
 				if (!st || !s.alive) {
-					state = h('span', { 'class': 'mv-bad' }, 'The service is not running');
+					state = h('span', { 'class': 'mv-bad' }, T('The service is not running'));
 				} else if (st.registered) {
-					state = h('span', { 'class': 'mv-ok' }, 'Online, calls work');
+					state = h('span', { 'class': 'mv-ok' }, T('Online, calls work'));
 				} else {
-					state = h('span', { 'class': 'mv-warn' }, 'Connecting: ' + (phases[st.phase] || st.phase || ''));
+					state = h('span', { 'class': 'mv-warn' }, T('Connecting: %s', phases[st.phase] ? T(phases[st.phase]) : (st.phase || '')));
 				}
-				row('Status', h('span', [state, st && st.since ? h('small', { style: 'opacity:.6' }, ' for ' + duration(st.since, st.updated_at)) : '']));
+				row(T('Status'), h('span', [state, st && st.since ? h('small', { style: 'opacity:.6' }, ' ' + T('for %s', duration(st.since, st.updated_at))) : '']));
 				if (st) {
-					row('Phone number', st.number || '—');
-					row('Mobile network', st.rat ? st.rat + ', IMS ' + (st.interface || '') : '—');
-					row('Phones connected', (st.phones && st.phones.length) ? st.phones.join(', ') : 'none');
+					row(T('Phone number'), st.number || '—');
+					row(T('Mobile network'), st.rat ? st.rat + ', IMS ' + (st.interface || '') : '—');
+					row(T('Phones connected'), (st.phones && st.phones.length) ? st.phones.join(', ') : T('none'));
 					if (s.missed && s.missed.length)
-						row('Missed calls', h('strong', String(s.missed.length)));
+						row(T('Missed calls'), h('strong', String(s.missed.length)));
 					if (st.restarts > 0)
-						row('Reconnects to the operator', String(st.restarts));
+						row(T('Reconnects to the operator'), String(st.restarts));
 					if (st.crash_restarts > 0)
-						row('Restarts after a crash', st.crash_restarts + ' in a row');
+						row(T('Restarts after a crash'), T('%d in a row', st.crash_restarts));
 					if (st.last_error)
-						row('Last error', h('small', st.last_error));
+						row(T('Last error'), h('small', st.last_error));
 				}
 				var stateDot = !st || !s.alive ? 'no' : (st.registered ? 'success' : 'warn');
-				return h('gl-card', { attrs: { title: 'Status', state: stateDot } }, [
+				return h('gl-card', { attrs: { title: T('Status'), state: stateDot } }, [
 					h('table', { 'class': 'mv-table mv-rows' }, [h('tbody', rows)]),
-					h('div', { 'class': 'mv-actions' }, [this.button(h, 'Restart the service', this.restart)]),
-					!st || !s.alive ? h('p', { 'class': 'mv-note' }, 'It starts by itself after setup; the service log below tells why it stopped.') : ''
+					h('div', { 'class': 'mv-actions' }, [this.button(h, T('Restart the service'), this.restart)]),
+					!st || !s.alive ? h('p', { 'class': 'mv-note' }, T('It starts by itself after setup; the service log below tells why it stopped.')) : ''
 				]);
 			},
 
 			renderMissed: function (h) {
 				var list = this.status.missed || [];
 				var body = list.length
-					? this.table(h, ['Time', 'From', 'Why it was missed'], list.map(function (m) {
-						return h('tr', [h('td', when(m.time)), h('td', m.from || 'withheld'), h('td', missedReasons[m.reason] || m.reason || '')]);
+					? this.table(h, [T('Time'), T('From'), T('Why it was missed')], list.map(function (m) {
+						return h('tr', [h('td', when(m.time)), h('td', m.from || T('withheld')), h('td', missedReasons[m.reason] ? T(missedReasons[m.reason]) : (m.reason || ''))]);
 					}))
-					: h('p', 'No missed calls.');
-				return h('gl-card', { attrs: { title: 'Missed calls' } }, [
+					: h('p', T('No missed calls.'));
+				return h('gl-card', { attrs: { title: T('Missed calls') } }, [
 					body,
-					list.length ? h('div', { 'class': 'mv-actions' }, [this.button(h, 'Clear the list', this.clearMissed)]) : '',
-					h('p', { 'class': 'mv-note' }, 'Incoming calls that no phone answered. Calls cannot reach the router while it has no 4G or is offline; such calls do not show up here.')
+					list.length ? h('div', { 'class': 'mv-actions' }, [this.button(h, T('Clear the list'), this.clearMissed)]) : '',
+					h('p', { 'class': 'mv-note' }, T('Incoming calls that no phone answered. Calls cannot reach the router while it has no 4G or is offline; such calls do not show up here.'))
 				]);
 			},
 
 			renderSMS: function (h) {
 				var sms = this.sms || [];
 				var body = sms.length
-					? this.table(h, ['Time', 'From', 'Message'], sms.map(function (m) {
+					? this.table(h, [T('Time'), T('From'), T('Message')], sms.map(function (m) {
 						return h('tr', [h('td', when(m.time)), h('td', m.from || ''), h('td', { 'class': 'mv-text' }, m.text || '')]);
 					}))
-					: h('p', 'No SMS.');
+					: h('p', T('No SMS.'));
 				var on = this.status.settings && this.status.settings.sms;
-				return h('gl-card', { attrs: { title: 'SMS' } }, [
+				return h('gl-card', { attrs: { title: T('SMS') } }, [
 					body,
-					h('p', { 'class': 'mv-note' }, (on
-						? 'New SMS also go to every phone as messages (the chat in Linphone); a message from a phone to a number goes out as an SMS. '
-						: 'SMS stay on the router (SMS on the phones is off in the settings). ') +
-						'The SMS page of this admin panel keeps the messages the modem received: delete them there.')
+					h('p', { 'class': 'mv-note' }, on
+						? T('New SMS also go to every phone as messages (the chat in Linphone); a message from a phone to a number goes out as an SMS. The SMS page of this admin panel keeps the messages the modem received: delete them there.')
+						: T('SMS stay on the router (SMS on the phones is off in the settings). The SMS page of this admin panel keeps the messages the modem received: delete them there.'))
 				]);
 			},
 
@@ -516,29 +570,29 @@
 				var phones = s.phones || [];
 				var body = phones.length
 					? h('div', { 'class': 'mv-phones' }, phones.map(function (p) {
-						var conn = secure.indexOf(p.user) >= 0 ? 'yes, encrypted' : online.indexOf(p.user) >= 0 ? 'yes' : 'no';
+						var conn = secure.indexOf(p.user) >= 0 ? T('yes, encrypted') : online.indexOf(p.user) >= 0 ? T('yes') : T('no');
 						return h('div', { 'class': 'mv-phone' }, [
 							h('div', { 'class': 'mv-phone-info' }, [
 								h('div', { 'class': 'mv-phone-name' }, p.user),
-								h('div', { 'class': 'mv-phone-meta' }, (p.ext ? 'Short number ' + p.ext : 'No short number') + ' · connected: ' + conn)
+								h('div', { 'class': 'mv-phone-meta' }, p.ext ? T('Short number %s · connected: %s', p.ext, conn) : T('No short number · connected: %s', conn))
 							]),
 							h('div', { 'class': 'mv-phone-acts' }, [
-								self.button(h, 'Connect / QR code', function () { self.showPhone(p.user); }, { type: 'primary' }),
-								self.button(h, 'Remove', function () { self.delPhone(p.user); }, { disabled: self.busy })
+								self.button(h, T('Connect / QR code'), function () { self.showPhone(p.user); }, { type: 'primary' }),
+								self.button(h, T('Remove'), function () { self.delPhone(p.user); }, { disabled: self.busy })
 							])
 						]);
 					}))
-					: h('p', 'No phones yet.');
-				return h('gl-card', { attrs: { title: 'Phones' } }, [
+					: h('p', T('No phones yet.'));
+				return h('gl-card', { attrs: { title: T('Phones') } }, [
 					body,
 					h('div', { 'class': 'mv-add' }, [
 						h('el-input', {
-							attrs: { placeholder: 'New phone, e.g. pixel', maxlength: 32 },
+							attrs: { placeholder: T('New phone, e.g. pixel'), maxlength: 32 },
 							model: { value: self.newPhone, callback: function (v) { self.newPhone = v; }, expression: 'newPhone' }
 						}),
-						this.button(h, 'Add phone', this.addPhone, { type: 'primary', disabled: this.busy })
+						this.button(h, T('Add phone'), this.addPhone, { type: 'primary', disabled: this.busy })
 					]),
-					h('p', { 'class': 'mv-note' }, 'An incoming call rings all connected phones; the first to answer gets it. Phones call and message each other by name or short number, for free and without the SIM. Adding or removing a phone restarts the service: calls are offline for about 10 seconds.')
+					h('p', { 'class': 'mv-note' }, T('An incoming call rings all connected phones; the first to answer gets it. Phones call and message each other by name or short number, for free and without the SIM. Adding or removing a phone restarts the service: calls are offline for about 10 seconds.'))
 				]);
 			},
 
@@ -559,37 +613,37 @@
 				if (!f)
 					return '';
 				var rows = [
-					this.formRow(h, 'Who may call', h('el-select', {
+					this.formRow(h, T('Who may call'), h('el-select', {
 						model: { value: f.incoming, callback: function (v) { f.incoming = v; }, expression: 'form.incoming' }
 					}, [
-						h('el-option', { props: { label: 'Everyone', value: 'all' } }),
-						h('el-option', { props: { label: 'Only the numbers below; others are declined', value: 'allow' } })
+						h('el-option', { props: { label: T('Everyone'), value: 'all' } }),
+						h('el-option', { props: { label: T('Only the numbers below; others are declined'), value: 'allow' } })
 					]))
 				];
 				if (f.incoming === 'allow')
-					rows.push(this.formRow(h, 'Allowed callers', this.input(h, 'allow', 'Full numbers, e.g. +447700900123 +33639981234')));
-				rows.push(this.formRow(h, 'Outgoing calls and SMS', this.input(h, 'dial', '* = any number, or prefixes: +44 +33')));
-				rows.push(this.formRow(h, 'Country code', this.input(h, 'country', 'For numbers with a leading 0, e.g. 44')));
-				rows.push(this.formRow(h, 'Ring time, seconds', this.input(h, 'ring_sec', '45')));
-				rows.push(this.formRow(h, 'SMS on the phones', h('gl-switch', {
+					rows.push(this.formRow(h, T('Allowed callers'), this.input(h, 'allow', T('Full numbers, e.g. +447700900123 +33639981234'))));
+				rows.push(this.formRow(h, T('Outgoing calls and SMS'), this.input(h, 'dial', T('* = any number, or prefixes: +44 +33'))));
+				rows.push(this.formRow(h, T('Country code'), this.input(h, 'country', T('For numbers with a leading 0, e.g. 44'))));
+				rows.push(this.formRow(h, T('Ring time, seconds'), this.input(h, 'ring_sec', '45')));
+				rows.push(this.formRow(h, T('SMS on the phones'), h('gl-switch', {
 					model: { value: f.sms, callback: function (v) { f.sms = v; }, expression: 'form.sms' }
 				})));
-				rows.push(this.formRow(h, 'Encrypted calls', h('gl-switch', {
+				rows.push(this.formRow(h, T('Encrypted calls'), h('gl-switch', {
 					model: { value: f.encryption, callback: function (v) { f.encryption = v; }, expression: 'form.encryption' }
 				})));
-				rows.push(h('p', { 'class': 'mv-note' }, 'SIP over TLS and SRTP audio for phones set up by QR code. A phone set up before calls without encryption until you scan its code again.'));
+				rows.push(h('p', { 'class': 'mv-note' }, T('SIP over TLS and SRTP audio for phones set up by QR code. A phone set up before calls without encryption until you scan its code again.')));
 				if (f.encryption) {
-					rows.push(this.formRow(h, 'SIP without encryption', h('gl-switch', {
+					rows.push(this.formRow(h, T('SIP without encryption'), h('gl-switch', {
 						model: { value: f.plain, callback: function (v) { f.plain = v; }, expression: 'form.plain' }
 					})));
-					rows.push(h('p', { 'class': 'mv-note' }, 'UDP and TCP next to TLS, for phones set up by hand or before encryption came. Off: TLS only, every phone is set up by QR code, and nothing a phone signs can be read off the Wi-Fi.'));
+					rows.push(h('p', { 'class': 'mv-note' }, T('UDP and TCP next to TLS, for phones set up by hand or before encryption came. Off: TLS only, every phone is set up by QR code, and nothing a phone signs can be read off the Wi-Fi.')));
 				}
-				return h('gl-card', { attrs: { title: 'Settings' } }, rows.concat([
+				return h('gl-card', { attrs: { title: T('Settings') } }, rows.concat([
 					h('div', { 'class': 'mv-actions' }, [
-						this.button(h, 'Reset', function () { self.form = self.formFrom(self.status.settings); }),
-						this.button(h, 'Apply', this.saveSettings, { type: 'primary', disabled: this.saving })
+						this.button(h, T('Reset'), function () { self.form = self.formFrom(self.status.settings); }),
+						this.button(h, T('Apply'), this.saveSettings, { type: 'primary', disabled: this.saving })
 					]),
-					h('p', { 'class': 'mv-note' }, 'Applying restarts the service: calls are offline for about 10 seconds.')
+					h('p', { 'class': 'mv-note' }, T('Applying restarts the service: calls are offline for about 10 seconds.'))
 				]));
 			},
 
@@ -607,25 +661,25 @@
 						model: { value: f[key], callback: function (v) { f[key] = v; }, expression: 'pushForm.' + key }
 					});
 				};
-				return h('gl-card', { attrs: { title: 'Push notifications', state: on ? 'success' : '' } }, [
-					h('p', { 'class': 'mv-note', style: 'margin:0 0 6px' }, 'iOS stops Linphone in the background, and Android may stop it too (battery savers, some phone makers). Then only a push from Linphone\'s makers wakes it for a call. The router asks their server (subscribe.linphone.org) to send it, signed with a free linphone.org account, and only when the phone has no connection: Linphone on Android normally keeps one and rings at once. Only the phone\'s push token and a random call ID leave the router, not the caller\'s number.'),
-					this.formRow(h, 'linphone.org login', field('login', { placeholder: 'e.g. myname, without @sip.linphone.org', maxlength: 64 })),
-					this.formRow(h, 'Password', field('password', { type: 'password', autocomplete: 'new-password',
-						placeholder: on && p.password_set ? 'Saved; leave empty to keep it' : 'The password of that account' })),
+				return h('gl-card', { attrs: { title: T('Push notifications'), state: on ? 'success' : '' } }, [
+					h('p', { 'class': 'mv-note', style: 'margin:0 0 6px' }, T("iOS stops Linphone in the background, and Android may stop it too (battery savers, some phone makers). Then only a push from Linphone's makers wakes it for a call. The router asks their server (subscribe.linphone.org) to send it, signed with a free linphone.org account, and only when the phone has no connection: Linphone on Android normally keeps one and rings at once. Only the phone's push token and a random call ID leave the router, not the caller's number.")),
+					this.formRow(h, T('linphone.org login'), field('login', { placeholder: T('e.g. myname, without @sip.linphone.org'), maxlength: 64 })),
+					this.formRow(h, T('Password'), field('password', { type: 'password', autocomplete: 'new-password',
+						placeholder: on && p.password_set ? T('Saved; leave empty to keep it') : T('The password of that account') })),
 					h('p', { 'class': 'mv-note' }, on
-						? 'Phones that can be woken: ' + (phones.length ? phones.join(', ') : 'none yet. A phone appears here once its Linphone has signed in.')
-						: 'Pushes are off: an iPhone gets calls only while Linphone is open. A free account: subscribe.linphone.org.'),
+						? (phones.length ? T('Phones that can be woken: %s', phones.join(', ')) : T('Phones that can be woken: none yet. A phone appears here once its Linphone has signed in.'))
+						: T('Pushes are off: an iPhone gets calls only while Linphone is open. A free account: subscribe.linphone.org.')),
 					h('div', { 'class': 'mv-actions' }, [
-						on ? this.button(h, 'Turn off', this.pushOff, { disabled: this.saving }) : '',
-						this.button(h, 'Save', this.savePush, { type: 'primary', disabled: this.saving || !(f.login || '').trim() })
+						on ? this.button(h, T('Turn off'), this.pushOff, { disabled: this.saving }) : '',
+						this.button(h, T('Save'), this.savePush, { type: 'primary', disabled: this.saving || !(f.login || '').trim() })
 					])
 				]);
 			},
 
 			renderMore: function (h) {
-				var log = h('gl-card', { attrs: { title: 'Service log' } }, [
+				var log = h('gl-card', { attrs: { title: T('Service log') } }, [
 					h('div', { 'class': 'mv-actions', style: 'justify-content:flex-start' }, [
-						this.button(h, 'Show the service log', this.showLog)
+						this.button(h, T('Show the service log'), this.showLog)
 					]),
 					this.logShown ? h('pre', { 'class': 'mv-log' }, this.log) : ''
 				]);
@@ -633,20 +687,20 @@
 			},
 
 			renderGiveBack: function (h) {
-				return h('gl-card', { attrs: { title: 'Give VoLTE back to the modem' } }, [
-					h('p', 'Restores the modem settings saved during setup and restarts the router. Calls then go to the modem\'s own VoLTE again, and this page offers the setup.'),
+				return h('gl-card', { attrs: { title: T('Give VoLTE back to the modem') } }, [
+					h('p', T("Restores the modem settings saved during setup and restarts the router. Calls then go to the modem's own VoLTE again, and this page offers the setup.")),
 					h('div', { 'class': 'mv-actions', style: 'justify-content:flex-start' }, [
-						this.button(h, 'Restore and restart', this.giveBack, { type: 'error', disabled: this.jobBusy() })
+						this.button(h, T('Restore and restart'), this.giveBack, { type: 'error', disabled: this.jobBusy() })
 					]),
 					this.renderJob(h, 'give_back')
 				]);
 			},
 
 			renderSetup: function (h) {
-				return h('gl-card', { attrs: { title: 'Set up' } }, [
-					h('p', 'Setup checks the router, the modem and the SIM, creates a phone account and switches the modem to its "External VoLTE Stack" mode with voice over IMS only, so that calls to the SIM reach this router and the network never moves them to 3G. The router restarts once (2-3 minutes without Wi-Fi and internet). The SIM\'s operator must offer VoLTE on it.'),
+				return h('gl-card', { attrs: { title: T('Set up') } }, [
+					h('p', T('Setup checks the router, the modem and the SIM, creates a phone account and switches the modem to its "External VoLTE Stack" mode with voice over IMS only, so that calls to the SIM reach this router and the network never moves them to 3G. The router restarts once (2-3 minutes without Wi-Fi and internet). The SIM\'s operator must offer VoLTE on it.')),
 					h('div', { 'class': 'mv-actions', style: 'justify-content:flex-start' }, [
-						this.button(h, 'Set up and restart the router', this.startSetup, { type: 'primary', disabled: this.jobBusy() })
+						this.button(h, T('Set up and restart the router'), this.startSetup, { type: 'primary', disabled: this.jobBusy() })
 					]),
 					this.renderJob(h, 'setup')
 				]);
@@ -660,9 +714,9 @@
 					return '';
 				var texts = jobTexts[action];
 				var note = job.state === 'failed'
-					? h('p', { 'class': 'mv-bad' }, texts.failed + job.error)
-					: h('p', { 'class': job.state === 'restarting' ? 'mv-warn' : 'mv-note' }, texts[job.state]);
-				return h('div', [note, h('pre', { 'class': 'mv-log' }, job.log || 'Starting…')]);
+					? h('p', { 'class': 'mv-bad' }, T(texts.failed, job.error))
+					: h('p', { 'class': job.state === 'restarting' ? 'mv-warn' : 'mv-note' }, T(texts[job.state]));
+				return h('div', [note, h('pre', { 'class': 'mv-log' }, job.log || T('Starting…'))]);
 			},
 
 			renderPhoneDialog: function (h) {
@@ -671,32 +725,32 @@
 					return '';
 				var body = [
 					h('ol', [
-						h('li', 'Connect the phone to this router\'s Wi-Fi (not the guest network).'),
-						h('li', 'Install Linphone: free on Google Play and the App Store.'),
-						h('li', 'In Linphone choose "Scan QR code" (in the assistant at first start, or under "Fetch remote configuration") and scan this code. Linphone sets up the account by itself.')
+						h('li', T("Connect the phone to this router's Wi-Fi (not the guest network).")),
+						h('li', T('Install Linphone: free on Google Play and the App Store.')),
+						h('li', T('In Linphone choose "Scan QR code" (in the assistant at first start, or under "Fetch remote configuration") and scan this code. Linphone sets up the account by itself.'))
 					])
 				];
 				if (p.svg)
 					body.push(h('div', { 'class': 'mv-qr' }, [h('div', { domProps: { innerHTML: p.svg } })]));
 				if (p.url) {
-					body.push(h('p', ['The same link, to type in instead: ', h('code', p.url)]));
-					body.push(h('p', { 'class': 'mv-note' }, 'The code works once, within 15 minutes, and only on this router\'s network. Do not share it: it signs a phone in. For a new code, close this window and press "Connect / QR code" again.'));
+					body.push(h('p', [T('The same link, to type in instead: '), h('code', p.url)]));
+					body.push(h('p', { 'class': 'mv-note' }, T('The code works once, within 15 minutes, and only on this router\'s network. Do not share it: it signs a phone in. For a new code, close this window and press "Connect / QR code" again.')));
 				}
-				body.push(h('p', 'By hand, in any SIP app:'));
+				body.push(h('p', T('By hand, in any SIP app:')));
 				body.push(h('table', { 'class': 'mv-table mv-rows' }, [h('tbody', [
-					h('tr', [h('td', 'Username'), h('td', [h('code', p.user)])]),
-					h('tr', [h('td', 'Password'), h('td', [h('code', p.password || '—')])]),
-					h('tr', [h('td', 'Domain'), h('td', [h('code', p.domain)])]),
-					h('tr', [h('td', 'Transport'), h('td', p.transport || 'UDP')])
+					h('tr', [h('td', T('Username')), h('td', [h('code', p.user)])]),
+					h('tr', [h('td', T('Password')), h('td', [h('code', p.password || '—')])]),
+					h('tr', [h('td', T('Domain')), h('td', [h('code', p.domain)])]),
+					h('tr', [h('td', T('Transport')), h('td', p.transport || 'UDP')])
 				])]));
 				body.push(h('p', p.ext
-					? 'Other phones call and message this one by the name "' + p.user + '" or the short number ' + p.ext + '.'
-					: 'Other phones call and message this one by the name "' + p.user + '".'));
-				body.push(h('p', { 'class': 'mv-note' }, 'Call or message 600 to check the phone without the mobile network: you hear yourself, a message comes back. On Android let Linphone run without battery restrictions, or calls ring late. On an iPhone, calls ring while Linphone is in the background only with a push account (Push notifications on this page); messages arrive while Linphone is open.'));
+					? T('Other phones call and message this one by the name "%s" or the short number %s.', p.user, p.ext)
+					: T('Other phones call and message this one by the name "%s".', p.user)));
+				body.push(h('p', { 'class': 'mv-note' }, T('Call or message 600 to check the phone without the mobile network: you hear yourself, a message comes back. On Android let Linphone run without battery restrictions, or calls ring late. On an iPhone, calls ring while Linphone is in the background only with a push account (Push notifications on this page); messages arrive while Linphone is open.')));
 				var close = function () { self.phone = null; };
-				return this.dialog(h, 'Connect the phone "' + p.user + '"', '520px', body, [
-					p.url ? this.button(h, 'Show on the router\'s display', function () { self.screenPhone(p.user); }) : null,
-					this.button(h, 'Close', close, { type: 'primary' })
+				return this.dialog(h, T('Connect the phone "%s"', p.user), '520px', body, [
+					p.url ? this.button(h, T("Show on the router's display"), function () { self.screenPhone(p.user); }) : null,
+					this.button(h, T('Close'), close, { type: 'primary' })
 				], close);
 			},
 
@@ -705,21 +759,21 @@
 				if (!c)
 					return '';
 				var close = function () { self.confirm = null; };
-				return this.dialog(h, 'Please confirm', '420px', [h('p', c.text)], [
-					this.button(h, 'Cancel', close),
-					this.button(h, 'Continue', function () { self.confirm = null; c.action(); }, { type: 'primary' })
+				return this.dialog(h, T('Please confirm'), '420px', [h('p', c.text)], [
+					this.button(h, T('Cancel'), close),
+					this.button(h, T('Continue'), function () { self.confirm = null; c.action(); }, { type: 'primary' })
 				], close);
 			}
 		},
 
 		render: function (h) {
-			var title = h('gl-title', { attrs: { title: 'Calls & SMS' } });
-			var intro = h('p', { 'class': 'mv-note', style: 'margin:0 0 12px' }, 'Calls and SMS to and from the SIM in this router, on phones connected to its Wi-Fi (Linphone or another SIP app).');
+			var title = h('gl-title', { attrs: { title: T('Calls & SMS') } });
+			var intro = h('p', { 'class': 'mv-note', style: 'margin:0 0 12px' }, T('Calls and SMS to and from the SIM in this router, on phones connected to its Wi-Fi (Linphone or another SIP app).'));
 			var dialogs = [this.renderPhoneDialog(h), this.renderConfirm(h)];
 			if (!this.loaded)
-				return h('div', { 'class': 'mudi-volte' }, [title, h('gl-card', [h('p', 'Loading…')])]);
+				return h('div', { 'class': 'mudi-volte' }, [title, h('gl-card', [h('p', T('Loading…'))])]);
 			if (!this.status)
-				return h('div', { 'class': 'mudi-volte' }, [title, h('gl-card', [h('p', { 'class': 'mv-bad' }, 'Cannot reach the mudi-volte service on the router.')])]);
+				return h('div', { 'class': 'mudi-volte' }, [title, h('gl-card', [h('p', { 'class': 'mv-bad' }, T('Cannot reach the mudi-volte service on the router.'))])]);
 			// A run of setup or give_back keeps its card until it ends, also when
 			// it has changed "enabled" on its way.
 			var busy = this.jobBusy() ? this.job.action : '';

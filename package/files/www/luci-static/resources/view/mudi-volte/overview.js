@@ -281,7 +281,7 @@ return view.extend({
 				body.push(E('div', { 'style': 'text-align:center;margin:1em 0' }, [
 					E('div', { 'style': 'display:inline-block;width:256px;height:256px' }, svg)
 				]));
-				body.push(E('p', {}, [ _('The same link, to type in instead: '), E('code', { 'style': 'word-break:break-all' }, [ url ]) ]));
+				body.push(E('p', {}, [ _('The same link, to type in instead:'), ' ', E('code', { 'style': 'word-break:break-all' }, [ url ]) ]));
 				body.push(E('p', {}, [ E('small', {}, [ _('The code works once, within 15 minutes, and only on this router\'s network. Do not share it: it signs a phone in. For a new code, close this window and press "Connect / QR code" again.') ]) ]));
 			}
 			body.push(E('p', {}, [ _('By hand, in any SIP app:') ]));
