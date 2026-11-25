@@ -116,7 +116,7 @@ el estado de la línea:
 ```
 # mudi-volte status
 Service: online, registered for 2m0s
-Number:  +447700900000
+Number:  +56987654321
 Network: LTE, IMS on rmnet_data1 (198.51.100.207), P-CSCF 192.0.2.28, 192.0.2.20
 Phones:  phone
 Modem:   External VoLTE mode
@@ -277,9 +277,9 @@ web, o con `uci` seguido de `mudi-volte restart`:
 ```sh
 # Hacer sonar los teléfonos solo para estos llamantes, rechazar a todos los demás:
 uci set mudi-volte.main.incoming=allow
-uci add_list mudi-volte.main.allow='+447700900123'
-# Llamadas salientes solo al Reino Unido y Francia (el valor por defecto '*' permite cualquier número):
-uci set mudi-volte.main.dial='+44 +33'
+uci add_list mudi-volte.main.allow='+56912345678'
+# Llamadas salientes solo a Chile y Argentina (el valor por defecto '*' permite cualquier número):
+uci set mudi-volte.main.dial='+56 +54'
 uci commit mudi-volte && mudi-volte restart
 ```
 

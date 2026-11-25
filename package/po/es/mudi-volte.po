@@ -21,15 +21,15 @@ msgstr "Quién puede llamar: all o allow"
 
 #: usr/lib/oui-httpd/rpc/mudi-volte:388
 msgid "Allowed caller %s: a phone number, e.g. +447700900123"
-msgstr "Llamante permitido %s: un número de teléfono, p. ej. +447700900123"
+msgstr "Llamante permitido %s: un número de teléfono, p. ej. +56912345678"
 
 #: usr/lib/oui-httpd/rpc/mudi-volte:400
 msgid "Outgoing: * or prefixes such as +44 +33"
-msgstr "Salientes: * o prefijos como +44 +33"
+msgstr "Salientes: * o prefijos como +56 +54"
 
 #: usr/lib/oui-httpd/rpc/mudi-volte:406
 msgid "Country code: up to 4 digits, e.g. 44"
-msgstr "Código de país: hasta 4 dígitos, p. ej. 44"
+msgstr "Código de país: hasta 4 dígitos, p. ej. 56"
 
 #: usr/lib/oui-httpd/rpc/mudi-volte:410
 msgid "Ring time: 10 to 120 seconds"
@@ -965,11 +965,11 @@ msgstr "Llamantes permitidos"
 
 #: www/luci-static/resources/view/mudi-volte/overview.js:493
 msgid "Full numbers with the country code, e.g. +447700900123."
-msgstr "Números completos con el código de país, p. ej. +447700900123."
+msgstr "Números completos con el código de país, p. ej. +56912345678."
 
 #: www/luci-static/resources/view/mudi-volte/overview.js:496
 msgid "A phone number, e.g. +447700900123"
-msgstr "Un número de teléfono, p. ej. +447700900123"
+msgstr "Un número de teléfono, p. ej. +56912345678"
 
 #: www/luci-static/resources/view/mudi-volte/overview.js:498 www/views/gl-sdk4-ui-mudi-volte.common.js:625
 msgid "Outgoing calls and SMS"
@@ -977,11 +977,11 @@ msgstr "Llamadas y SMS salientes"
 
 #: www/luci-static/resources/view/mudi-volte/overview.js:498
 msgid "* allows any number; or prefixes separated by spaces, e.g. \"+44 +33\"."
-msgstr "* permite cualquier número; o prefijos separados por espacios, p. ej. \"+44 +33\"."
+msgstr "* permite cualquier número; o prefijos separados por espacios, p. ej. \"+56 +54\"."
 
 #: www/luci-static/resources/view/mudi-volte/overview.js:501
 msgid "* or prefixes such as +44 +33"
-msgstr "* o prefijos como +44 +33"
+msgstr "* o prefijos como +56 +54"
 
 #: www/luci-static/resources/view/mudi-volte/overview.js:503 www/views/gl-sdk4-ui-mudi-volte.common.js:626
 msgid "Country code"
@@ -989,7 +989,7 @@ msgstr "Código de país"
 
 #: www/luci-static/resources/view/mudi-volte/overview.js:503
 msgid "For numbers dialled with a leading 0, e.g. 44 for the UK. Setup fills it in from the SIM."
-msgstr "Para números marcados con un 0 inicial, p. ej. 44 para el Reino Unido. La configuración lo completa a partir de la SIM."
+msgstr "Para números marcados con un 0 inicial, p. ej. 56 para Chile. La configuración lo completa a partir de la SIM."
 
 #: www/luci-static/resources/view/mudi-volte/overview.js:505 www/views/gl-sdk4-ui-mudi-volte.common.js:627
 msgid "Ring time, seconds"
@@ -1181,15 +1181,15 @@ msgstr "Una llamada entrante hace sonar todos los teléfonos conectados; la toma
 
 #: www/views/gl-sdk4-ui-mudi-volte.common.js:624
 msgid "Full numbers, e.g. +447700900123 +33639981234"
-msgstr "Números completos, p. ej. +447700900123 +33639981234"
+msgstr "Números completos, p. ej. +56912345678 +56221234567"
 
 #: www/views/gl-sdk4-ui-mudi-volte.common.js:625
 msgid "* = any number, or prefixes: +44 +33"
-msgstr "* = cualquier número, o prefijos: +44 +33"
+msgstr "* = cualquier número, o prefijos: +56 +54"
 
 #: www/views/gl-sdk4-ui-mudi-volte.common.js:626
 msgid "For numbers with a leading 0, e.g. 44"
-msgstr "Para números con un 0 inicial, p. ej. 44"
+msgstr "Para números con un 0 inicial, p. ej. 56"
 
 #: www/views/gl-sdk4-ui-mudi-volte.common.js:643
 msgid "Reset"

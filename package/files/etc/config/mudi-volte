@@ -9,7 +9,8 @@ config voip 'main'
 	# Outgoing calls from the phones: '*' allows any number, or a list of
 	# prefixes such as '+44 +33'.
 	option dial '*'
-	# Country code for numbers dialled with a leading 0 (e.g. 44 for the UK).
+	# Country code for numbers dialled with a leading 0 (e.g. 44 for the UK,
+	# 56 for Chile).
 	# Filled in by setup from the SIM.
 	option country ''
 	# Codecs offered to the phones, best first.
