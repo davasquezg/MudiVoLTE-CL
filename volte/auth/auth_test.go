@@ -120,6 +120,28 @@ func TestChoosePrefersHighestSupportedQ(t *testing.T) {
 	}
 }
 
+// ChooseOffered keeps to the pairs of our Security-Client: the best of them
+// by q, else server order; ealg absent is null.
+func TestChooseOfferedKeepsToTheOffer(t *testing.T) {
+	ms, err := ParseMechanisms("ipsec-3gpp;alg=hmac-sha-1-96;ealg=aes-cbc;q=0.9, ipsec-3gpp;alg=hmac-md5-96;q=0.5, " +
+		"ipsec-3gpp;alg=hmac-sha-1-96;ealg=null;q=0.5")
+	if err != nil {
+		t.Fatal(err)
+	}
+	null := []Mechanism{{Alg: "hmac-sha-1-96", Ealg: "null"}, {Alg: "hmac-md5-96", Ealg: "null"}}
+	if m, err := ChooseOffered(ms, null); err != nil || m.Alg != "hmac-md5-96" || m.Ealg != "" {
+		t.Errorf("null offers chose %+v, %v", m, err)
+	}
+	all := append(null, Mechanism{Alg: "hmac-sha-1-96", Ealg: "aes-cbc"})
+	if m, err := ChooseOffered(ms, all); err != nil || m.Ealg != "aes-cbc" || m.Q != 0.9 {
+		t.Errorf("full offer chose %+v, %v", m, err)
+	}
+	only := []Mechanism{{Alg: "hmac-md5-96", Ealg: "des-ede3-cbc"}}
+	if m, err := ChooseOffered(ms, only); err == nil {
+		t.Errorf("a pair outside the offer chosen: %+v", m)
+	}
+}
+
 func TestClientMechanismString(t *testing.T) {
 	m := Mechanism{Name: MechIPsec3GPP, Alg: "hmac-md5-96", Ealg: "null", Prot: "esp", Mode: "trans",
 		SPIc: 1, SPIs: 2, PortC: 5100, PortS: 5101, Q: -1}

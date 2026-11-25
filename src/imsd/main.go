@@ -102,15 +102,10 @@ func runMode(cfg *Config, logger *slog.Logger, hold bool) error {
 // stack on stubs. Not a single AT command and not a single packet to the
 // network.
 func runCheck(cfg *Config, logger *slog.Logger) error {
-	for _, s := range cfg.PCSCF {
-		if net.ParseIP(s) == nil {
-			return fmt.Errorf("check: pcscf %q is not an IP address", s)
-		}
-	}
 	if t := cfg.IPsecTool; t != "" && t != "netlink" && t != "ip" {
 		return fmt.Errorf("check: ipsec_tool %q is neither netlink nor ip", t)
 	}
-	if err := cfg.checkIMSProfile(); err != nil {
+	if err := cfg.check(); err != nil {
 		return fmt.Errorf("check: %w", err)
 	}
 	pcscf := cfg.pcscfIPs()
@@ -130,8 +125,11 @@ func runCheck(cfg *Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("check: identities: %w", err)
 	}
-	st, err := newNetStack("", regConfig(cfg, ids, "000000000000000", local, pcscf, "3GPP-E-UTRAN-FDD", logger),
-		nil, callConfig(cfg, "", logger), smsConfig(cfg, ids, "", logger), logger)
+	rc, err := regConfig(cfg, ids, "000000000000000", local, pcscf, "3GPP-E-UTRAN-FDD", logger)
+	if err != nil {
+		return fmt.Errorf("check: %w", err)
+	}
+	st, err := newNetStack("", rc, nil, callConfig(cfg, "", logger), smsConfig(cfg, ids, "", logger), logger)
 	if err != nil {
 		return fmt.Errorf("check: stack: %w", err)
 	}
@@ -187,7 +185,7 @@ func deriveIdentities(imsi, mcc, mnc, domain string) (identities, error) {
 	return identities{IMPI: imsi + "@" + domain, IMPU: "sip:" + imsi + "@" + domain, Domain: domain}, nil
 }
 
-func regConfig(cfg *Config, ids identities, imei string, ue netip.Addr, pcscf []net.IP, ani string, logger *slog.Logger) reg.Config {
+func regConfig(cfg *Config, ids identities, imei string, ue netip.Addr, pcscf []net.IP, ani string, logger *slog.Logger) (reg.Config, error) {
 	port := uint16(cfg.PCSCFPort)
 	if port == 0 {
 		port = 5060
@@ -206,7 +204,14 @@ func regConfig(cfg *Config, ids identities, imei string, ue netip.Addr, pcscf []
 	if cfg.IPsecTool == "ip" {
 		rc.IPsec = ipsec.ExecRunner{} // netlink otherwise (the library's default)
 	}
-	return rc
+	// Config.check, which every mode that registers runs first, rejects an
+	// invalid list already; one that gets here all the same is an error
+	// rather than the default offer in its place.
+	var err error
+	if rc.Offers, err = cfg.ipsecOffers(); err != nil {
+		return reg.Config{}, err
+	}
+	return rc, nil
 }
 
 func callConfig(cfg *Config, ani string, logger *slog.Logger) call.Config {
@@ -267,16 +272,25 @@ func newATLink() *ATLink {
 	return &ATLink{Run: ubusAT(12 * time.Second), Retries: 4, Timeout: 12 * time.Second}
 }
 
-// imsProfile returns the cid of the IMS APN: from the config, else the
-// profile with APN "ims" in CGDCONT, else 2 (as on the tested Mudi, §71).
-func imsProfile(ctx context.Context, cfg *Config, link *ATLink) int {
+// imsProfile returns the cid of the IMS APN: from the config (ims_profile),
+// else the profile with the APN ims_apn ("ims") in CGDCONT, else 2 (as on
+// the tested Mudi, §71). The log tells which one and why.
+func imsProfile(ctx context.Context, cfg *Config, link *ATLink, logger *slog.Logger) int {
 	if cfg.IMSProfile > 0 {
+		logger.Info("IMS profile", "cid", cfg.IMSProfile, "from", "ims_profile")
 		return cfg.IMSProfile
 	}
-	if out, err := link.query(ctx, "AT+CGDCONT?"); err == nil {
-		if cid := parseIMSProfile(out); cid > 0 {
+	apn := cfg.imsAPN()
+	out, err := link.query(ctx, "AT+CGDCONT?")
+	if err == nil {
+		if cid := parseIMSProfile(out, apn); cid > 0 {
+			logger.Info("IMS profile", "cid", cid, "apn", apn, "from", "CGDCONT")
 			return cid
 		}
+		logger.Warn("IMS profile: no profile with the APN in CGDCONT, trying cid 2; set ims_apn or ims_profile",
+			"apn", apn, "cid", 2)
+	} else {
+		logger.Warn("IMS profile: CGDCONT failed, trying cid 2", "apn", apn, "cid", 2, "err", err)
 	}
 	return 2
 }
@@ -326,9 +340,12 @@ func discoverPDN(ctx context.Context, cfg *Config, link *ATLink, profile int, lo
 // buildLiveStack sets up the live stack on top of an IMS PDN that is already
 // up (the daemon and register-once modes). It sends nothing to the network.
 func buildLiveStack(cfg *Config, logger *slog.Logger) (*netStack, error) {
+	if err := cfg.check(); err != nil {
+		return nil, err
+	}
 	link := newATLink()
 	ctx := context.Background()
-	env, err := discoverPDN(ctx, cfg, link, imsProfile(ctx, cfg, link), logger)
+	env, err := discoverPDN(ctx, cfg, link, imsProfile(ctx, cfg, link, logger), logger)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +411,11 @@ func buildStack(ctx context.Context, cfg *Config, link *ATLink, env pdnEnv, logg
 		logger.Debug("P-Access-Network-Info", "ani_full", ani)
 	}
 
-	return newNetStack(iface, regConfig(cfg, ids, imei, ue, pcscf, ani, logger), cardAuth{card},
+	rc, err := regConfig(cfg, ids, imei, ue, pcscf, ani, logger)
+	if err != nil {
+		return nil, err
+	}
+	return newNetStack(iface, rc, cardAuth{card},
 		callConfig(cfg, ani, logger), smsConfig(cfg, ids, card.SMSC(), logger), logger)
 }
 

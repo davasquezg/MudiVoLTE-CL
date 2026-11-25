@@ -44,6 +44,15 @@ collect() { eval "$2=\"\${$2} \$1\""; }
 
 add_allow() { json_add_string "" "$1"; }
 
+# add_number NAME VALUE: VALUE as a JSON number when it is one; anything else
+# as a string, which the daemon refuses at start with NAME in the error.
+add_number() {
+	case "$2" in
+	'' | *[!0-9]*) json_add_string "$1" "$2" ;;
+	*) json_add_int "$1" "$2" ;;
+	esac
+}
+
 # spool_dir NAME: a directory of GL's smsd spool from its config, which the
 # smstools3 service writes at boot; the stock path until then.
 spool_dir() {
@@ -88,6 +97,19 @@ build_config() {
 	config_get ipsec_tool main ipsec_tool ''
 	PCSCF=''
 	config_list_foreach main pcscf collect PCSCF
+	# Operator settings: unset or empty = automatic (what the network, the
+	# modem and the SIM give); the daemon checks them when it starts.
+	local pcscf_port imei domain smsc net_codecs ims_profile ims_apn loose_src
+	config_get pcscf_port main pcscf_port ''
+	config_get imei main imei ''
+	config_get domain main domain ''
+	config_get smsc main smsc ''
+	config_get net_codecs main network_codecs ''
+	config_get ims_profile main ims_profile ''
+	config_get ims_apn main ims_apn ''
+	config_get_bool loose_src main loose_inbound_src_port ''
+	IPSEC_OFFERS=''
+	config_list_foreach main ipsec_offer collect IPSEC_OFFERS
 	[ -n "$listen" ] || listen=$(uci -q get network.lan.ipaddr)
 	listen=${listen%%/*}
 
@@ -107,6 +129,17 @@ build_config() {
 	# shellcheck disable=SC2086
 	[ -n "$PCSCF" ] && add_list pcscf $PCSCF
 	[ -n "$ipsec_tool" ] && json_add_string ipsec_tool "$ipsec_tool"
+	[ -n "$pcscf_port" ] && add_number pcscf_port "$pcscf_port"
+	[ -n "$imei" ] && json_add_string imei "$imei"
+	[ -n "$domain" ] && json_add_string domain "$domain"
+	[ -n "$smsc" ] && json_add_string smsc "$smsc"
+	# shellcheck disable=SC2086
+	[ -n "$net_codecs" ] && add_list codecs $net_codecs
+	[ -n "$ims_profile" ] && add_number ims_profile "$ims_profile"
+	[ -n "$ims_apn" ] && json_add_string ims_apn "$ims_apn"
+	[ -n "$loose_src" ] && json_add_boolean loose_inbound_src_port "$loose_src"
+	# shellcheck disable=SC2086
+	[ -n "$IPSEC_OFFERS" ] && add_list ipsec_offers $IPSEC_OFFERS
 	json_add_string state_file "$RUNDIR/state.json"
 	json_add_string phones_file "$RUNDIR/phones.json"
 	json_add_string sms_inbox /etc/mudi-volte/sms-inbox.jsonl

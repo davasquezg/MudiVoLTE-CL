@@ -380,7 +380,9 @@ service after a crash: N in a row". Código: `src/imsd/crashes.go`.
 `mudi-volte setup` verifica el helper y la API DSI antes de tocar el módem
 (`check_data_call` en `package/files/usr/sbin/mudi-volte`). No existe una opción `data_call`;
 la clave de configuración opcional `dsi_helper` del daemon reemplaza la ruta del ejecutable del helper.
-La antigua clave JSON `dsi_path` se ignora al actualizar. Un `ims_profile` fuera de 0–255 termina el
+La antigua clave JSON `dsi_path` se ignora al actualizar. Un `ims_profile` fuera de 0–255, u otro
+ajuste del operador que el daemon no puede usar (`pcscf`, `pcscf_port`, `imei`, `domain`, `smsc`,
+`codecs`, `ims_apn`, `ipsec_offers`; ver `package/README.es.md`), termina el
 servicio al iniciar, con el error en `mudi-volte status`: es un error en la configuración,
 no una falla de la llamada (procd vuelve a iniciar el servicio cada 10 s, con el mismo resultado; ese
 término no cuenta como crash, no llega a ninguna red).
@@ -401,7 +403,11 @@ AT+CGDCONT?
 # Buscar la línea con APN "ims" → tomar el primer campo (cid, normalmente 2)
 ```
 
-Código: `parseIMSProfile` en `src/imsd/pdn.go`.
+El APN que se busca es `ims_apn` (opción UCI y clave JSON; por defecto `ims`, sin distinguir
+mayúsculas); `ims_profile` indica el cid directamente y se salta la búsqueda. Si no se encuentra
+ninguno, el daemon prueba con el cid 2 (el Mudi probado, §71). El log indica qué perfil se tomó y
+por qué (`IMS profile cid=… from=ims_profile`, `from=CGDCONT`, o una advertencia antes del cid 2).
+Código: `imsProfile` en `src/imsd/main.go`, `parseIMSProfile` en `src/imsd/pdn.go`.
 
 ### 2.3 AT+CGCONTRDP — parámetros del PDN IMS
 
@@ -820,7 +826,13 @@ UE                                  P-CSCF (192.0.2.28:5060)
 - **Conexiones**: el primer REGISTER va por TCP plano desde un puerto efímero hacia P-CSCF:5060;
   tras el 401 el daemon escucha en `port-s`, instala las SA y abre una conexión protegida
   desde `port-c` → el `port-s` del P-CSCF. El REGISTER protegido lleva `Security-Verify` (un eco de `Security-Server`).
-- **Security-Client**: ofrecemos `hmac-md5-96` / `null` (TS 33.203 §7). Cada REGISTER sobre
+- **Security-Client**: un mecanismo `ipsec-3gpp` por par de algoritmos, el mejor primero, todos con
+  los mismos SPI y puertos (TS 33.203 §7). Por defecto, todos los pares que instala la capa IPsec:
+  `hmac-md5-96`/`null` (el único par que se ofrecía antes y el que eligió la red probada),
+  `hmac-sha-1-96`/`null`, luego los mismos dos con `aes-cbc` y después con `des-ede3-cbc`. La lista
+  UCI `ipsec_offer` (JSON `ipsec_offers`, cadenas `"alg/ealg"`) reemplaza la lista. Del
+  `Security-Server` el daemon solo toma un mecanismo cuyo par haya ofrecido: el de `q` más alto, o
+  si no el primero (RFC 3329 §2.3; `auth.ChooseOffered`). Cada REGISTER sobre
   las SA vigentes lleva SPI nuevos y un port-c nuevo, con el mismo port-s (ver "Refresco y re-REGISTER" más abajo).
 - **P-Access-Network-Info** (PANI): `3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=<PLMN><TAC><ECI>`.
   Obligatorio: el registro no avanza cuando no se puede construir la información de la red de acceso (§75).
@@ -842,8 +854,17 @@ UE                                  P-CSCF (192.0.2.28:5060)
 
 - `port-c` y `port-s` son nuestros puertos protegidos de cliente y servidor (aleatorios, del rango
   20000–59999), anunciados en Security-Client. En la tabla también se llaman `port-uc` y `port-us`.
-- Algoritmos: `hmac-md5-96` para integridad (clave IK, 16 bytes), cifrado `null`.
-- Claves: IK de la respuesta AKA para la integridad de las SA; CK se ignora (ealg=null).
+- Algoritmos: el par que eligió el P-CSCF (arriba); en la red probada, `hmac-md5-96` para
+  integridad y cifrado `null`.
+- Claves (TS 33.203 Anexo I, `auth.IntegrityKey` y `auth.EncryptionKey`): `hmac-md5-96` usa IK
+  (16 bytes), `hmac-sha-1-96` IK seguida de 32 bits en cero (20 bytes); `aes-cbc` usa CK
+  (16 bytes), `des-ede3-cbc` CK1 ‖ CK2 ‖ CK1 (24 bytes); con `null` no se usa CK. Los pares con
+  cifrado aún no se han visto en una red real: requieren los cifradores `cbc(aes)` y
+  `cbc(des3_ede)` del kernel (por verificar en el router). Si falla la instalación de las SA de
+  un par con cifrado, el cliente deja una advertencia en el log, saca los pares con cifrado de
+  todos los Security-Client siguientes y se registra de nuevo de inmediato
+  (`reg.Client.dropCiphers`); si la oferta no tiene ningún par sin cifrado, el error se informa
+  tal cual.
 - Modo: transporte (no túnel).
 - Cada plantilla de estado y de política tiene `reqid 0x4d554449` (la palabra ASCII
   `MUDI`). Es una etiqueta de propiedad compartida por todas las SA de MudiVoLTE; el SPI sigue

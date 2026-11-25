@@ -134,7 +134,7 @@ func runService(cfg *Config, logger *slog.Logger) error {
 		s.crash.stopped()
 		return err
 	}
-	if err := cfg.checkIMSProfile(); err != nil {
+	if err := cfg.check(); err != nil {
 		s.state.fail(err)
 		return end(fmt.Errorf("service: %w", err))
 	}
@@ -427,7 +427,7 @@ func (s *service) bringUp(ctx context.Context, tr *regTracker) (string, error) {
 		s.noteRAT(rat)
 	}
 
-	profile := imsProfile(ctx, s.cfg, s.link)
+	profile := imsProfile(ctx, s.cfg, s.link, s.log)
 	s.state.update(func(st *serviceState) { st.Phase = "pdn" })
 	call, err := startDataCall(ctx, s.cfg, profile, s.log)
 	switch {

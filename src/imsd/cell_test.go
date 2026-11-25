@@ -109,7 +109,9 @@ func TestResolveANI(t *testing.T) {
 	// The stack is built with what came out: no header when it is empty
 	// (volte/reg and volte/call add it only when set).
 	cfg := &Config{}
-	if rc := regConfig(cfg, identities{}, "", netip.Addr{}, nil, "", logger); rc.PANI != "" {
+	if rc, err := regConfig(cfg, identities{}, "", netip.Addr{}, nil, "", logger); err != nil {
+		t.Fatalf("regConfig: %v", err)
+	} else if rc.PANI != "" {
 		t.Errorf("reg.Config.PANI = %q, want none", rc.PANI)
 	}
 	if cc := callConfig(cfg, "", logger); cc.PANI != "" {

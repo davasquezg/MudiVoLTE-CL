@@ -61,6 +61,38 @@ comandos AT, la llamada de datos IMS y la cola de SMS usan su suscripción).
 Las páginas web editan el mismo archivo. Después de `uci commit mudi-volte`, ejecuta
 `mudi-volte restart`.
 
+Para una red que los necesite, el archivo también trae ajustes del operador, comentados:
+sin definir o vacío significa automático, desde la red, el módem y la SIM.
+
+| Opción UCI | Campo del daemon | Qué ajusta | Sin definir |
+|---|---|---|---|
+| `list pcscf` | `pcscf` | direcciones del P-CSCF (IPv4) en el orden en que se prueban | las que anuncia la red (CGCONTRDP) |
+| `pcscf_port` | `pcscf_port` | puerto del primer REGISTER, sin protección | 5060 |
+| `domain` | `domain` | dominio IMS de origen | desde la ISIM, o si no armado a partir del IMSI |
+| `imei` | `imei` | IMEI que se entrega a la red (15 dígitos) | el del módem (CGSN) |
+| `smsc` | `smsc` | centro de servicio de SMS (+ y hasta 15 dígitos) | desde la SIM, o si no desde el primer SMS entrante |
+| `network_codecs` | `codecs` | códecs que se ofrecen a la red, el mejor primero: `AMR-WB`, `PCMA`, `PCMU` | todos (`codecs` es la lista de los teléfonos) |
+| `ims_apn` | `ims_apn` | APN del perfil del módem que se usa para IMS | `ims` |
+| `ims_profile` | `ims_profile` | el número (cid) de ese perfil, sin buscar el APN | el perfil con `ims_apn`, o si no el 2 |
+| `list ipsec_offer` | `ipsec_offers` | pares de algoritmos IPsec que se ofrecen al P-CSCF, el mejor primero, como `integridad/cifrado` | los seis, ver más abajo |
+| `loose_inbound_src_port` | `loose_inbound_src_port` | 0 fija el puerto de origen del P-CSCF en las políticas IPsec de entrada | sin fijar |
+
+Los pares IPsec son `hmac-md5-96` o `hmac-sha-1-96` con `null`, `aes-cbc` o
+`des-ede3-cbc`. Sin definir, el daemon ofrece los seis, primero `hmac-md5-96/null` (el
+único que se ofrecía antes y el que eligió la red probada), luego
+`hmac-sha-1-96/null` y después los pares con cifrado. Estos no se han probado en
+una red real, y puede que al kernel del router le falten sus cifradores (por
+verificar en el router): si falla la instalación de las SA IPsec después de que la
+red eligió un cifrado, el daemon deja una advertencia en el log y se registra de
+nuevo ofreciendo solo los pares sin cifrado. Para no ofrecer cifrado nunca, deja en
+la lista solo esos dos pares.
+El daemon revisa estos valores al iniciar: con uno que no puede usar no inicia, e
+indica la opción en el log y en `mudi-volte status`, con su campo del daemon
+seguido de la opción UCI cuando no coinciden, por ejemplo
+`codecs (UCI network_codecs)` (un `pcscf_port` o un `ims_profile` que no es un
+número, solo en el log). El log también indica qué perfil del
+módem tomó para IMS y por qué.
+
 ### Números
 
 Un número marcado en un teléfono va a la red en formato internacional (E.164)
@@ -256,7 +288,8 @@ encendida: el panel táctil informa solo a la app de fábrica.
 El script de init convierte la configuración UCI en `/var/run/mudi-volte/imsd.json`
 e inicia `mudi-imsd -mode service -config` con él (`/etc/init.d/mudi-volte
 json` imprime lo mismo; contiene las contraseñas de los teléfonos). El daemon lee unos
-pocos campos que el paquete nunca escribe. Sirven para el desarrollo en un router
+pocos campos que el paquete nunca escribe (los ajustes del operador de más arriba
+los escribe solo cuando están definidos). Sirven para el desarrollo en un router
 sin teléfonos, con una configuración propia y `-mode daemon` o `-mode
 register-once` (el encabezado de `src/imsd/main.go` lista los modos):
 
