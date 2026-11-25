@@ -1,6 +1,7 @@
 // Package media carries the voice of one call: RTP (RFC 3550), the AMR-WB
-// payload format (RFC 4867), G.711 (ITU-T G.711), DTMF events (RFC 4733) and
-// WAV helpers. The AMR-WB speech codec itself is pluggable (see FrameCoder).
+// and AMR payload format (RFC 4867), G.711 (ITU-T G.711), DTMF events
+// (RFC 4733) and WAV helpers. The AMR-WB and AMR speech codecs themselves are
+// pluggable (see FrameCoder).
 package media
 
 import (

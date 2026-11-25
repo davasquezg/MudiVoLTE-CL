@@ -17,18 +17,38 @@ const (
 // amrwbBits is the number of class A+B+C bits per frame type (TS 26.201 Table 2).
 var amrwbBits = [16]int{132, 177, 253, 285, 317, 365, 397, 461, 477, 40}
 
-// Frame is one AMR-WB frame: type, quality bit and speech bits, MSB first,
-// in the order of TS 26.201 (the same order as the RFC 4867 storage format).
+// amrFormat is what RFC 4867 needs to know about one codec of the AMR
+// family: the speech bits of each frame type and which frame types exist.
+// The payload layout itself is the same for AMR and AMR-WB.
+type amrFormat struct {
+	name string
+	bits [16]int
+	sid  uint8 // highest speech/SID frame type; the ones below are speech modes
+	lost bool  // FT 14 SPEECH_LOST exists (AMR-WB only, RFC 4867 §4.3.2)
+}
+
+var amrwb = amrFormat{name: "AMR-WB", bits: amrwbBits, sid: FTSID, lost: true}
+
+// valid reports a frame type that may appear in a ToC. RFC 4867 §4.3.2: a
+// packet with any other type SHOULD be discarded whole (9–14 for AMR,
+// 10–13 for AMR-WB).
+func (a *amrFormat) valid(ft uint8) bool {
+	return ft <= a.sid || (a.lost && ft == FTLost) || ft == FTNoData
+}
+
+func (a *amrFormat) frameBytes(ft uint8) int { return (a.bits[ft&15] + 7) / 8 }
+
+// Frame is one AMR or AMR-WB frame: type, quality bit and speech bits, MSB
+// first, in the order of TS 26.101 / TS 26.201 (the same order as the RFC 4867
+// storage format).
 type Frame struct {
 	FT   uint8
 	Good bool   // Q bit
 	Bits []byte // ceil(bits/8) bytes, zero padded
 }
 
-// FrameBytes is the byte length of a frame's speech bits.
-func FrameBytes(ft uint8) int { return (amrwbBits[ft&15] + 7) / 8 }
-
-func validFT(ft uint8) bool { return ft <= FTSID || ft == FTLost || ft == FTNoData }
+// FrameBytes is the byte length of an AMR-WB frame's speech bits.
+func FrameBytes(ft uint8) int { return amrwb.frameBytes(ft) }
 
 // bitWriter / bitReader pack MSB first.
 type bitWriter struct {
@@ -61,7 +81,7 @@ type bitReader struct {
 
 func (r *bitReader) get(bits int) (uint32, error) {
 	if r.n+bits > len(r.b)*8 {
-		return 0, errors.New("AMR-WB payload truncated")
+		return 0, errors.New("AMR payload truncated")
 	}
 	var v uint32
 	for i := 0; i < bits; i++ {
@@ -83,9 +103,19 @@ func (r *bitReader) getBits(bits int) ([]byte, error) {
 	return out, nil
 }
 
-// PackAMRWB builds an RFC 4867 single-channel payload (§4.4.x BE, §4.4.x OA)
-// carrying frames in order, with codec mode request cmr.
+// PackAMRWB builds an RFC 4867 single-channel AMR-WB payload (§4.4.x BE,
+// §4.4.x OA) carrying frames in order, with codec mode request cmr.
 func PackAMRWB(frames []Frame, cmr uint8, octetAligned bool) ([]byte, error) {
+	return amrwb.pack(frames, cmr, octetAligned)
+}
+
+// UnpackAMRWB parses an RFC 4867 single-channel AMR-WB payload.
+func UnpackAMRWB(p []byte, octetAligned bool) (frames []Frame, cmr uint8, err error) {
+	return amrwb.unpack(p, octetAligned)
+}
+
+// pack builds an RFC 4867 single-channel payload of this codec.
+func (a *amrFormat) pack(frames []Frame, cmr uint8, octetAligned bool) ([]byte, error) {
 	if len(frames) == 0 {
 		return nil, errors.New("no frames")
 	}
@@ -95,7 +125,7 @@ func PackAMRWB(frames []Frame, cmr uint8, octetAligned bool) ([]byte, error) {
 		w.put(0, 4)
 	}
 	for i, f := range frames {
-		if !validFT(f.FT) {
+		if !a.valid(f.FT) {
 			return nil, fmt.Errorf("invalid frame type %d", f.FT)
 		}
 		follow := uint32(0)
@@ -114,7 +144,7 @@ func PackAMRWB(frames []Frame, cmr uint8, octetAligned bool) ([]byte, error) {
 		}
 	}
 	for _, f := range frames {
-		bits := amrwbBits[f.FT]
+		bits := a.bits[f.FT]
 		if len(f.Bits)*8 < bits {
 			return nil, fmt.Errorf("frame type %d needs %d bits, got %d bytes", f.FT, bits, len(f.Bits))
 		}
@@ -126,8 +156,8 @@ func PackAMRWB(frames []Frame, cmr uint8, octetAligned bool) ([]byte, error) {
 	return w.b, nil
 }
 
-// UnpackAMRWB parses an RFC 4867 single-channel payload.
-func UnpackAMRWB(p []byte, octetAligned bool) (frames []Frame, cmr uint8, err error) {
+// unpack parses an RFC 4867 single-channel payload of this codec.
+func (a *amrFormat) unpack(p []byte, octetAligned bool) (frames []Frame, cmr uint8, err error) {
 	r := &bitReader{b: p}
 	v, err := r.get(4)
 	if err != nil {
@@ -153,7 +183,7 @@ func UnpackAMRWB(p []byte, octetAligned bool) (frames []Frame, cmr uint8, err er
 		if octetAligned {
 			r.n += 2
 		}
-		if !validFT(uint8(ft)) {
+		if !a.valid(uint8(ft)) {
 			return nil, 0, fmt.Errorf("invalid frame type %d", ft)
 		}
 		frames = append(frames, Frame{FT: uint8(ft), Good: q == 1})
@@ -161,11 +191,11 @@ func UnpackAMRWB(p []byte, octetAligned bool) (frames []Frame, cmr uint8, err er
 			break
 		}
 		if len(frames) > 32 {
-			return nil, 0, errors.New("too many AMR-WB frames in one packet")
+			return nil, 0, fmt.Errorf("too many %s frames in one packet", a.name)
 		}
 	}
 	for i := range frames {
-		bits := amrwbBits[frames[i].FT]
+		bits := a.bits[frames[i].FT]
 		if frames[i].Bits, err = r.getBits(bits); err != nil {
 			return nil, 0, err
 		}
@@ -176,27 +206,33 @@ func UnpackAMRWB(p []byte, octetAligned bool) (frames []Frame, cmr uint8, err er
 	return frames, cmr, nil
 }
 
-// StorageFrame renders a frame in the RFC 4867 §5.3 storage format
+// StorageFrame renders an AMR-WB frame in the RFC 4867 §5.3 storage format
 // (header byte + speech bytes), the input of common AMR-WB decoders.
-func (f Frame) StorageFrame() []byte {
+func (f Frame) StorageFrame() []byte { return amrwb.storage(f) }
+
+// FrameFromStorage parses one AMR-WB storage-format frame.
+func FrameFromStorage(b []byte) (Frame, error) { return amrwb.fromStorage(b) }
+
+// storage renders f in the RFC 4867 §5 storage format of this codec.
+func (a *amrFormat) storage(f Frame) []byte {
 	h := f.FT << 3
 	if f.Good {
 		h |= 0x04
 	}
-	out := make([]byte, 1+FrameBytes(f.FT))
+	out := make([]byte, 1+a.frameBytes(f.FT))
 	out[0] = h
 	copy(out[1:], f.Bits)
 	return out
 }
 
-// FrameFromStorage parses one storage-format frame.
-func FrameFromStorage(b []byte) (Frame, error) {
+// fromStorage parses one storage-format frame of this codec.
+func (a *amrFormat) fromStorage(b []byte) (Frame, error) {
 	if len(b) == 0 {
 		return Frame{}, errors.New("empty frame")
 	}
 	ft := b[0] >> 3 & 15
-	if !validFT(ft) || len(b) < 1+FrameBytes(ft) {
-		return Frame{}, fmt.Errorf("bad storage frame (type %d, %d bytes)", ft, len(b))
+	if !a.valid(ft) || len(b) < 1+a.frameBytes(ft) {
+		return Frame{}, fmt.Errorf("bad %s storage frame (type %d, %d bytes)", a.name, ft, len(b))
 	}
-	return Frame{FT: ft, Good: b[0]&0x04 != 0, Bits: append([]byte(nil), b[1:1+FrameBytes(ft)]...)}, nil
+	return Frame{FT: ft, Good: b[0]&0x04 != 0, Bits: append([]byte(nil), b[1:1+a.frameBytes(ft)]...)}, nil
 }
