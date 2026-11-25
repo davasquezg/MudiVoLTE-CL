@@ -9,10 +9,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -192,13 +194,16 @@ func parseIMSProfile(out string) int {
 }
 
 // servingCellANI builds P-Access-Network-Info from the live cell
-// (AT+QENG="servingcell"). Format (TS 24.229 §7.2A.4):
-// access-type;utran-cell-id-3gpp=PLMN+TAC+ECI, where PLMN is 5-6 digits, TAC
-// 4 hex digits and ECI 7 hex digits (11 hex digits in total after the PLMN).
-// The QENG reply format varies (the state/RAT field is sometimes there and
-// sometimes not: transient modem states), so we parse by the "LTE" TOKEN, not
-// by indices, and make up to 3 attempts with a pause.
-func servingCellANI(ctx context.Context, link *ATLink) (string, error) {
+// (AT+QENG="servingcell"). Format (TS 24.229 V17.8.0 §7.2A.4, items 12 and
+// 22): access-type;utran-cell-id-3gpp=MCC+MNC+TAC+cell ID, where the MCC is 3
+// decimal digits and the MNC 2 or 3 ("depending on MCC value"). On LTE
+// (3GPP-E-UTRAN-FDD/TDD) the TAC is 4 hex digits and the E-UTRAN Cell
+// Identity (ECI) 7; on NR (3GPP-NR-FDD/TDD) the TAC is 6 hex digits and the
+// NR Cell Identity (NCI) 9. The QENG reply format varies (the state/RAT field
+// is sometimes there and sometimes not: transient modem states), so we parse
+// by the "LTE" or "NR5G-SA" TOKEN, not by indices, and make up to 3 attempts
+// with a pause. homeMCC and homeMNC come from the SIM (see plmnMNC).
+func servingCellANI(ctx context.Context, link *ATLink, homeMCC, homeMNC string) (string, error) {
 	var out string
 	var err error
 	const cmd = `AT+QENG="servingcell"`
@@ -207,7 +212,7 @@ func servingCellANI(ctx context.Context, link *ATLink) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		ani, perr := parseQENGANI(out)
+		ani, perr := parseQENGANI(out, homeMCC, homeMNC)
 		if perr == nil {
 			return ani, nil
 		}
@@ -221,11 +226,30 @@ func servingCellANI(ctx context.Context, link *ATLink) (string, error) {
 	return "", fmt.Errorf("QENG: unreachable")
 }
 
-func parseQENGANI(out string) (string, error) {
+// servingCell is the serving cell as AT+QENG="servingcell" reports it.
+type servingCell struct {
+	nr       bool   // NR5G-SA; false: LTE (single line, or the anchor on EN-DC)
+	duplex   string // "FDD" or "TDD"
+	mcc, mnc string // as the modem prints them
+	tac, id  string // hex: the TAC and the ECI (LTE) or the NCI (NR)
+}
+
+func parseQENGANI(out, homeMCC, homeMNC string) (string, error) {
+	c, err := parseQENGCell(out)
+	if err != nil {
+		return "", err
+	}
+	return c.ani(homeMCC, homeMNC)
+}
+
+func parseQENGCell(out string) (servingCell, error) {
 	// Single-line format: +QENG: "servingcell",<state>,"LTE",<duplex>,…
 	// Multi-line (EN-DC, LTE+NR5G-NSA): "servingcell",<state> on a line of its
 	// own, then +QENG: "LTE",<duplex>,… and +QENG: "NR5G-NSA",… (§85). The fields
-	// of all +QENG lines are joined: the order after "LTE" is the same.
+	// of all +QENG lines are joined: the order after "LTE" is the same. The
+	// NR5G-NSA line has no cell ID and no TAC: on EN-DC the cell is the LTE
+	// anchor, as before.
+	// 5G SA (one line): +QENG: "servingcell",<state>,"NR5G-SA",<duplex>,…
 	var s []string
 	for _, line := range strings.Split(strings.ReplaceAll(out, "\r", "\n"), "\n") {
 		line = strings.TrimSpace(line)
@@ -237,28 +261,57 @@ func parseQENGANI(out string) (string, error) {
 		}
 	}
 	if len(s) == 0 {
-		return "", errors.New("no +QENG in the reply")
+		return servingCell{}, errors.New("no +QENG in the reply")
 	}
-	ratIdx := -1
+	// An LTE entry wins, so LTE and EN-DC stay as they were; a reply with
+	// both tokens has not been seen.
+	lteIdx, saIdx := -1, -1
 	for k, v := range s {
-		if v == "LTE" {
-			ratIdx = k
-			break
+		if v == "LTE" && lteIdx < 0 {
+			lteIdx = k
+		}
+		if v == "NR5G-SA" && saIdx < 0 {
+			saIdx = k
 		}
 	}
-	// After "LTE": duplex, MCC, MNC, cellID, PCID, EARFCN, band, UL bw, DL bw, TAC.
-	if ratIdx < 0 || ratIdx+10 >= len(s) {
-		return "", fmt.Errorf("no LTE entry or too few fields: %v", firstN(s, 6))
+	var c servingCell
+	var ratIdx int
+	switch {
+	case lteIdx >= 0:
+		// After "LTE": duplex, MCC, MNC, cellID, PCID, EARFCN, band, UL bw, DL bw, TAC.
+		if lteIdx+10 >= len(s) {
+			return servingCell{}, fmt.Errorf("too few fields after LTE: %v", firstN(s, 6))
+		}
+		ratIdx = lteIdx
+		c.tac = s[lteIdx+10] // before §85 this was the EARFCN (+6) by mistake; the network accepted it
+	case saIdx >= 0:
+		// After "NR5G-SA": duplex, MCC, MNC, cellID, PCID, TAC, ARFCN, band,
+		// … The TAC comes right after the PCID, unlike LTE. Field order of
+		// Quectel's own comment (QConnectManager atc.c) and of a live RG650V
+		// capture: "servingcell",<state>,"NR5G-SA",<duplex_mode>,<MCC>,<MNC>,
+		// <cellID>,<PCID>,<TAC>,<ARFCN>,<band>,… To verify on the router.
+		if saIdx+6 >= len(s) {
+			return servingCell{}, fmt.Errorf("too few fields after NR5G-SA: %v", firstN(s, 6))
+		}
+		ratIdx = saIdx
+		c.nr = true
+		c.tac = s[saIdx+6]
+	default:
+		return servingCell{}, fmt.Errorf("no LTE or NR5G-SA entry: %v", firstN(s, 6))
 	}
-	duplex := strings.ToUpper(s[ratIdx+1])
-	if duplex != "FDD" && duplex != "TDD" {
-		return "", fmt.Errorf("duplex is neither FDD nor TDD: %q", s[ratIdx+1])
+	c.duplex = strings.ToUpper(s[ratIdx+1])
+	if c.duplex != "FDD" && c.duplex != "TDD" {
+		return servingCell{}, fmt.Errorf("duplex is neither FDD nor TDD: %q", s[ratIdx+1])
 	}
-	mcc, mnc, eci := s[ratIdx+2], s[ratIdx+3], s[ratIdx+4]
-	tac := s[ratIdx+10] // before §85 this was the EARFCN (+6) by mistake; the network accepted it
-	if !allDigits(mcc) || !allDigits(mnc) {
-		return "", fmt.Errorf("PLMN is not digits: %q%q", mcc, mnc)
+	c.mcc, c.mnc, c.id = s[ratIdx+2], s[ratIdx+3], s[ratIdx+4]
+	if !allDigits(c.mcc) || !allDigits(c.mnc) || len(c.mcc) > 3 || len(c.mnc) > 3 {
+		return servingCell{}, fmt.Errorf("PLMN is not digits: %q%q", c.mcc, c.mnc)
 	}
+	return c, nil
+}
+
+// ani builds the P-Access-Network-Info value of the cell (see servingCellANI).
+func (c servingCell) ani(homeMCC, homeMNC string) (string, error) {
 	padHex := func(v string, n int) (string, error) {
 		v = strings.ToUpper(v)
 		if len(v) > n || !isHex(v) {
@@ -266,16 +319,74 @@ func parseQENGANI(out string) (string, error) {
 		}
 		return strings.Repeat("0", n-len(v)) + v, nil
 	}
-	eciHex, err := padHex(eci, 7)
+	access, tacLen, idLen := "3GPP-E-UTRAN-", 4, 7
+	if c.nr {
+		access, tacLen, idLen = "3GPP-NR-", 6, 9
+	}
+	idHex, err := padHex(c.id, idLen)
 	if err != nil {
 		return "", err
 	}
-	tacHex, err := padHex(tac, 4)
+	tacHex, err := padHex(c.tac, tacLen)
 	if err != nil {
 		return "", err
 	}
-	cellID := mcc + mnc + tacHex + eciHex
-	return "3GPP-E-UTRAN-" + duplex + ";utran-cell-id-3gpp=" + cellID, nil
+	// The MCC is always 3 digits; the modem prints it so ("001", "460").
+	mcc := strings.Repeat("0", 3-len(c.mcc)) + c.mcc
+	cellID := mcc + plmnMNC(c.mnc, mcc, homeMCC, homeMNC) + tacHex + idHex
+	return access + c.duplex + ";utran-cell-id-3gpp=" + cellID, nil
+}
+
+// plmnMNC gives the MNC the number of digits TS 24.229 §7.2A.4 asks for (2 or
+// 3, "depending on MCC value"). Every capture we know of prints it as a string
+// with its leading zeros ("00", "01", "260"), and the spec takes it from the
+// cell's ECGI, which is what the modem prints: an MNC of 2 or 3 digits is used
+// as it is. Some countries mix 2- and 3-digit MNCs under one MCC, so the SIM's
+// MNC length cannot tell how long another network's MNC is. Only a 1-digit MNC
+// (a firmware that printed it as a number, "01" -> "1") is ambiguous (issue
+// #12): if, padded to 3 digits, it is the SIM's 3-digit home MNC (EF_AD,
+// through card.MNC) in the home MCC, it gets 3 digits; else 2. An MNC is never
+// shortened.
+func plmnMNC(mnc, mcc, homeMCC, homeMNC string) string {
+	if len(mnc) != 1 {
+		return mnc
+	}
+	if mcc == homeMCC && len(homeMNC) == 3 && "00"+mnc == homeMNC {
+		return homeMNC
+	}
+	return "0" + mnc
+}
+
+// lastANI is the last P-Access-Network-Info read from the cell in this run of
+// the daemon. Kept in memory only: it holds the router's location.
+var lastANI struct {
+	sync.Mutex
+	v string
+}
+
+// resolveANI picks the P-Access-Network-Info for a new stack. A cell that was
+// read is used and remembered. A cell that cannot be read (a QENG format we do
+// not know, or no cell for a moment) no longer stops the registration (#7):
+// the last cell read is used, else the header is left out. volte/reg and
+// volte/call add the header only when it is set; TS 24.229 asks the UE to send
+// it, so a network may reject the REGISTER without it (to verify with the
+// operator), and the warning says so. The value chosen is fixed in the
+// reg/call config: a reused (possibly stale) or missing PANI stays until the
+// IMS session is rebuilt (the next buildStack), e.g. after the modem was on
+// WCDMA for a moment.
+func resolveANI(ani string, err error, logger *slog.Logger) string {
+	lastANI.Lock()
+	defer lastANI.Unlock()
+	if err == nil && ani != "" {
+		lastANI.v = ani
+		return ani
+	}
+	if lastANI.v != "" {
+		logger.Warn("serving cell not read, using the last P-Access-Network-Info (it may be stale; kept until the IMS session is rebuilt)", "err", err)
+		return lastANI.v
+	}
+	logger.Warn("serving cell not read, registering without P-Access-Network-Info: the network may reject it", "err", err)
+	return ""
 }
 
 func firstN(s []string, n int) []string {

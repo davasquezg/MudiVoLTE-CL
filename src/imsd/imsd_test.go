@@ -391,6 +391,8 @@ func TestMaskNumber(t *testing.T) {
 		"3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=001013C0D01A2B03":  "3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=00101…",
 		"3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=3102603C0D01A2B03": "3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=310260…",
 		"3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=3C0D01A":           "3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=…",
+		"3GPP-NR-FDD;utran-cell-id-3gpp=001013C0D121A2B3C4D5":   "3GPP-NR-FDD;utran-cell-id-3gpp=00101…",
+		"3GPP-NR-TDD;utran-cell-id-3gpp=001001C94B00C9A82340B":  "3GPP-NR-TDD;utran-cell-id-3gpp=001001…",
 		"IEEE-802.11": "IEEE-802.11",
 	} {
 		if got := maskANI(in); got != want {
@@ -415,7 +417,7 @@ func TestParseIMEI(t *testing.T) {
 func TestParseQENGANI(t *testing.T) {
 	// Live format (S2/S3, with the state field):
 	out := "+QENG: \"servingcell\",\"NOCONN\",\"LTE\",\"FDD\",001,01,1A2B03,123,1300,3,5,5,3C0D,-102,-14,-67,12,0,-,25\r\nOK"
-	ani, err := parseQENGANI(out)
+	ani, err := parseQENGANI(out, "001", "01")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +427,7 @@ func TestParseQENGANI(t *testing.T) {
 	}
 	// Shifted format (no state: a transient modem state, caught on 03.11):
 	out2 := "+QENG: \"servingcell\",\"LTE\",\"FDD\",001,01,1A2B03,123,1300,3,5,5,3C0D,-102\r\nOK"
-	ani2, err := parseQENGANI(out2)
+	ani2, err := parseQENGANI(out2, "001", "01")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,14 +436,14 @@ func TestParseQENGANI(t *testing.T) {
 	}
 	// Multi-line EN-DC (a live reply, 03.11 17:36, §85).
 	out3 := "\r\n+QENG: \"servingcell\",\"NOCONN\"\r\n+QENG: \"LTE\",\"FDD\",001,01,1A2B03,123,1300,3,5,5,3C0D,-103,-15,-67,10,8,127,-\r\n+QENG: \"NR5G-NSA\",001,01,123,-104,13,-10,636768,7\r\n\r\nOK\r\n"
-	if ani3, err := parseQENGANI(out3); err != nil || ani3 != want {
+	if ani3, err := parseQENGANI(out3, "001", "01"); err != nil || ani3 != want {
 		t.Errorf("EN-DC: ani = %q, err = %v, want %q", ani3, err, want)
 	}
-	if _, err := parseQENGANI("\r\nERROR\r\n"); err == nil {
+	if _, err := parseQENGANI("\r\nERROR\r\n", "001", "01"); err == nil {
 		t.Error("want an error without +QENG")
 	}
-	if _, err := parseQENGANI("+QENG: \"servingcell\",\"NOCONN\",\"NR5G\",\"TDD\",1,2,3,4,5,6,7\r\nOK"); err == nil {
-		t.Error("want an error for non-LTE")
+	if _, err := parseQENGANI("+QENG: \"servingcell\",\"NOCONN\",\"NR5G\",\"TDD\",1,2,3,4,5,6,7\r\nOK", "001", "01"); err == nil {
+		t.Error("want an error for an unknown RAT")
 	}
 }
 

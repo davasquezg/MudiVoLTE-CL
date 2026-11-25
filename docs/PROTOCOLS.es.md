@@ -494,24 +494,64 @@ El formato de la respuesta varía (§77, §85):
   +QENG: "LTE","FDD",MCC,MNC,cellID,PCID,EARFCN,band,ULbw,DLbw,TAC,...
   +QENG: "NR5G-NSA",...
   ```
+  La línea `NR5G-NSA` no trae ID de celda ni TAC: en EN-DC la celda es el ancla LTE.
+- Una sola línea, 5G SA (orden de campos según el comentario del propio Quectel en
+  QConnectManager `atc.c` y una captura pública de un RG650V; **por verificar en el router**, no
+  tenemos una red SA para probar):
+  `+QENG: "servingcell",<state>,"NR5G-SA",<duplex>,MCC,MNC,cellID,PCID,TAC,ARFCN,band,NR_DL_bw,RSRP,RSRQ,SINR,...`
+  Aquí el TAC va justo después del PCID (`+6` desde el token `"NR5G-SA"`), el ID de celda es el
+  NCI (hasta 9 dígitos hex) y el TAC tiene hasta 6 dígitos hex. El ejemplo de Quectel trae un espacio
+  antes del MCC; el parser recorta cada campo. Sin celda, el módem responde `+QENG: "servingcell","SEARCH"`.
 
 **⚠️ Trampa (§85):** después de la palabra `"LTE"` los campos son, en orden:
 `duplex, MCC, MNC, cellID, PCID, EARFCN, band, ULbw, DLbw, **TAC (+10)**`.
 TAC es el **décimo** campo, no el sexto (ese es EARFCN). El parser debe contar desde el token `"LTE"`.
 Código: `parseQENGANI` en `src/imsd/pdn.go`, con 3 reintentos y la respuesta cruda en el error.
+Si una respuesta trae una entrada `"LTE"` y otra `"NR5G-SA"` (no se ha visto), se usa la de LTE.
 
-Formato de P-Access-Network-Info (TS 24.229 §7.2A.4):
+Formato de P-Access-Network-Info (TS 24.229 V17.8.0 §7.2A.4, ítems 12 y 22): `utran-cell-id-3gpp` es
+el MCC (3 dígitos decimales), el MNC ("2 o 3 dígitos decimales según el valor del MCC"), el TAC y la
+identidad de celda, en hex en mayúsculas. En LTE el TAC tiene 4 dígitos hex (EPC) y el ECI 7; en NR
+el tipo de acceso es `3GPP-NR-FDD` o `3GPP-NR-TDD` (el campo duplex de QENG), el TAC tiene 6 dígitos
+hex y el NCI 9 (el NID opcional de 11 dígitos es solo para redes no públicas autónomas):
 ```
 3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=<PLMN><TAC4hex><ECI7hex>
 # ejemplo (celda ficticia): 3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=001013C0D01A2B03
 # PLMN=00101 (MCC=001, MNC=01: la red de prueba 3GPP), TAC=3C0D, ECI=01A2B03
+3GPP-NR-FDD;utran-cell-id-3gpp=<PLMN><TAC6hex><NCI9hex>
+# ejemplo (celda ficticia): 3GPP-NR-FDD;utran-cell-id-3gpp=001013C0D121A2B3C4D5
+# PLMN=00101, TAC=3C0D12, NCI=1A2B3C4D5
 ```
+Si la red del operador acepta un REGISTER con la forma NR está **por verificar en el router**
+(VoNR en sí sigue sin soporte, ver el README).
 
-Si el módem está en WCDMA (un estado transitorio después de que se levanta el PDN), no construir un PANI para E-UTRAN;
-esperar LTE (§79).
+**Largo del MNC (issue #12).** Todas las capturas que conocemos imprimen el MNC como cadena con su
+cero a la izquierda (`01`, `00`, `260`), y TS 24.229 dice que el MNC "should be obtained from the
+E-UTRAN Cell Global Identifier (ECGI)", que es lo que imprime el módem. Por eso un MNC de 2 o 3 dígitos
+se usa tal como lo imprime el módem, sea cual sea el largo del MNC de la SIM: algunos países mezclan
+MNC de 2 y 3 dígitos bajo un mismo MCC, y el largo de la SIM no dice nada del MNC de otra red. Solo se
+rellena un MNC de 1 dígito (un firmware que lo imprimiera como número convertiría `01` en `1` y
+dejaría el ID de celda con un dígito de menos): el daemon lee la celda después de la SIM y, si el MNC
+rellenado a 3 dígitos es el MNC propio de 3 dígitos de la SIM (EF_AD) bajo el MCC propio, queda con 3
+dígitos; si no, con 2. Nunca acorta un MNC. Un MNC de 1 dígito de otra red con MNC de 3 dígitos
+seguiría saliendo mal; no se conoce ninguna captura con un MNC de 1 dígito.
+
+**Celda ilegible (issue #7).** Si ningún intento entrega una celda (un formato desconocido, o un
+momento sin celda), el registro sigue: con el último P-Access-Network-Info leído desde que partió el
+daemon (solo en memoria) o, si no hay, sin la cabecera. Ambos casos dejan un aviso en el log.
+`volte/reg` y `volte/call` agregan la cabecera solo cuando tiene valor; TS 24.229 pide que el UE la
+envíe, así que una red podría rechazar un REGISTER sin ella (por verificar con el operador).
+
+Si el módem está en WCDMA (un estado transitorio después de que se levanta el PDN), no se construye un PANI
+para E-UTRAN (§79). Antes del issue #7 la configuración fallaba y se reintentaba hasta que volvía LTE;
+ahora esa respuesta cuenta como una celda ilegible, así que el registro sigue con el último PANI o sin
+él, como arriba. El PANI queda fijo al construir la pila IMS: un PANI reutilizado (quizás desactualizado)
+o ausente se mantiene en cada REGISTER y llamada hasta que se reconstruye la sesión IMS (un reinicio de
+la sesión o del daemon). El aviso del log lo indica.
 
 El ID de celda revela la ubicación del router con una precisión de cientos de metros. Desde la 0.9.14 el daemon
-registra en el log solo el PLMN (`…=00101…`) en nivel info; el valor completo se registra en nivel debug.
+registra en el log solo el PLMN (`…=00101…`) en nivel info (en NR se ocultan los últimos 15 dígitos hex, en LTE
+los últimos 11); el valor completo se registra en nivel debug.
 Las celdas de los ejemplos de este documento y de las pruebas son ficticias.
 
 ### 2.7 AT+CGSN — IMEI

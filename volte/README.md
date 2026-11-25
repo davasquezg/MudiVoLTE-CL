@@ -72,6 +72,9 @@ published.
   `500 … "AKA IP+Port conflict"` (§93, §94). After a 401 challenge the new SAs
   are installed beside the old ones; the UE's server port (the Contact of the
   calls) does not change while the registration lasts.
-- P-Access-Network-Info is mandatory; it is built from `AT+QENG="servingcell"`.
+- P-Access-Network-Info is required by TS 24.229; imsd normally builds it from
+  `AT+QENG="servingcell"`. `volte/reg` and `volte/call` add it only when it is
+  set: when no cell has been read, imsd leaves it out with a warning (see
+  docs/PROTOCOLS.md §2.6).
 
 Where the code comes from: `PROVENANCE.md`.
