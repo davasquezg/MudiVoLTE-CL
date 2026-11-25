@@ -423,7 +423,14 @@ check_device() {
 	pick_sim
 }
 
-# MCC → country calling code, for numbers dialled with a leading 0.
+# MCC → country calling code, for numbers dialled with a leading 0. Setup
+# writes it to mudi-volte.main.country only while that is empty, so a wrong or
+# missing entry is fixed there. Latin America and the Caribbean (3xx, 7xx)
+# come from Wikipedia's lists of MCCs and of calling codes, not yet checked
+# against ITU-T E.212 and E.164 (to verify). The Caribbean members of the North
+# American Numbering Plan share +1. Left out: the MCCs that several calling
+# codes share, 340 (Guadeloupe +590, Martinique +596, French Guiana +594) and
+# 362 (Bonaire, Sint Eustatius and Saba, and Curacao +599, Sint Maarten +1).
 country_code() {
 	case "$1" in
 	202) echo 30 ;; 204) echo 31 ;; 206) echo 32 ;; 208) echo 33 ;; 214) echo 34 ;;
@@ -435,9 +442,16 @@ country_code() {
 	270) echo 352 ;; 272) echo 353 ;; 274) echo 354 ;; 276) echo 355 ;; 278) echo 356 ;;
 	280) echo 357 ;; 282) echo 995 ;; 283) echo 374 ;; 284) echo 359 ;; 286) echo 90 ;;
 	293) echo 386 ;; 294) echo 389 ;; 297) echo 382 ;; 302) echo 1 ;; 31[0-6]) echo 1 ;;
+	330 | 332 | 338 | 342 | 344 | 346 | 348 | 350 | 352 | 354 | 356 | 358 | 360) echo 1 ;;
+	364 | 365 | 366 | 370 | 374 | 376) echo 1 ;;
+	363) echo 297 ;; 368) echo 53 ;; 372) echo 509 ;;
 	334) echo 52 ;; 400) echo 994 ;; 401) echo 7 ;; 404 | 405) echo 91 ;; 424) echo 971 ;;
 	425) echo 972 ;; 440 | 441) echo 81 ;; 450) echo 82 ;; 460) echo 86 ;; 505) echo 61 ;;
 	520) echo 66 ;; 525) echo 65 ;; 530) echo 64 ;; 722) echo 54 ;; 724) echo 55 ;;
+	702) echo 501 ;; 704) echo 502 ;; 706) echo 503 ;; 708) echo 504 ;; 710) echo 505 ;;
+	712) echo 506 ;; 714) echo 507 ;; 716) echo 51 ;; 730) echo 56 ;; 732) echo 57 ;;
+	734) echo 58 ;; 736) echo 591 ;; 738) echo 592 ;; 740) echo 593 ;; 742) echo 594 ;;
+	744) echo 595 ;; 746) echo 597 ;; 748) echo 598 ;; 750) echo 500 ;;
 	esac
 }
 
@@ -816,9 +830,19 @@ cmd_setup() {
 	# and a later restore have to use the same one.
 	uci set "mudi-volte.main.sim_slot=$(sim)"
 	[ -n "$(phone_users)" ] || phone_add "$phone"
-	if [ -z "$(uci -q get mudi-volte.main.country)" ]; then
+	# The country code turns a number dialled with a leading 0 into +CC...: say
+	# which one the line uses, so that a wrong guess is seen and fixed.
+	cc=$(uci -q get mudi-volte.main.country)
+	if [ -n "$cc" ]; then
+		say "$(T 'Country calling code: +%s (mudi-volte.main.country).' "$cc")"
+	else
 		cc=$(country_code "$mcc")
-		[ -n "$cc" ] && uci set "mudi-volte.main.country=$cc"
+		if [ -n "$cc" ]; then
+			uci set "mudi-volte.main.country=$cc"
+			say "$(T 'Country calling code: +%s, chosen from the MCC of the SIM (mudi-volte.main.country).' "$cc")"
+		else
+			say "$(T 'No country calling code known for MCC %s: numbers dialled with a leading 0 go out as dialled. To set one: %s' "${mcc:-?}" "uci set mudi-volte.main.country=CODE; uci commit mudi-volte")"
+		fi
 	fi
 	uci commit mudi-volte
 

@@ -198,6 +198,34 @@ build_config
                     self.assertIn("cannot load the firmware's DSI API", r.stderr)
                     self.assertEqual(self.read("at"), "")
 
+    def test_country_codes_of_latin_america(self):
+        # Issue #4: a Chilean SIM (MCC 730) left the country code empty. MCCs
+        # that several calling codes share stay without one.
+        want = {"730": "56", "716": "51", "732": "57", "722": "54", "724": "55", "334": "52",
+                "702": "501", "750": "500", "370": "1", "342": "1", "368": "53", "372": "509",
+                "363": "297", "214": "34", "340": "", "362": "", "001": ""}
+        r = self.run_case("for m in %s; do echo \"$m=$(country_code $m)\"; done" % " ".join(want))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.splitlines(), ["%s=%s" % kv for kv in want.items()])
+
+    def test_setup_says_the_country_code_it_chose(self):
+        # No country set yet, a Chilean SIM; the question is answered no.
+        r = self.run_case('uci() { echo "uci $*" >>"$SB/events"; }\n'
+                          "at() { echo 730010000000000; }\ncmd_setup", AGREE="no")
+        self.assertIn("Country calling code: +56, chosen from the MCC of the SIM", r.stdout)
+        self.assertIn("uci set mudi-volte.main.country=56", self.read("events"))
+
+    def test_setup_says_the_country_code_set_before(self):
+        r = self.run_case("cmd_setup", AGREE="no")
+        self.assertIn("Country calling code: +44 (mudi-volte.main.country).", r.stdout)
+        self.assertNotIn("set mudi-volte.main.country", self.read("events"))
+
+    def test_setup_says_when_it_knows_no_country_code(self):
+        r = self.run_case('uci() { echo "uci $*" >>"$SB/events"; }\ncmd_setup', AGREE="no")
+        self.assertIn("No country calling code known for MCC 001", r.stdout)
+        self.assertIn("uci set mudi-volte.main.country=CODE", r.stdout)
+        self.assertNotIn("set mudi-volte.main.country", self.read("events"))
+
     def test_qr_handoff_restores_screen_only_after_last_code(self):
         first = subprocess.Popen(SHELL + [str(self.script("screen_loop alpha 30 url", "first.sh"))],
                                  env={**os.environ, "SB": str(self.sb), "QR_SECS": "10"},

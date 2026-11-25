@@ -24,7 +24,7 @@ mudi-volte version
 
 | Command | What it does |
 |---|---|
-| `setup` | Checks the router, the modem and the SIM, creates a phone account, switches the modem to External VoLTE mode with voice over IMS only, turns off the router's sleep mode and restarts the router once. When the modem refuses a value, setup sets back what it wrote and fails: no restart, and the service and the sleep settings stay as they were. `-y` answers the question itself |
+| `setup` | Checks the router, the modem and the SIM, creates a phone account, switches the modem to External VoLTE mode with voice over IMS only, turns off the router's sleep mode and restarts the router once. When the modem refuses a value, setup sets back what it wrote and fails: no restart, and the service and the sleep settings stay as they were. `-y` answers the question itself. Setup also prints the country calling code for numbers dialled with a leading 0: `mudi-volte.main.country` when it is set, otherwise the code of the SIM's MCC, which it writes there (the codes of Latin America and the Caribbean are still to verify against ITU-T E.212/E.164; set the right one with `uci` if it is wrong or missing) |
 | `setup --lte-only` | Also keeps the modem on 4G/5G. Rarely needed: it costs the internet where only 3G reaches. `--keep-3g` is the default |
 | `status` | Is the SIM registered, which phones are connected, how many calls were missed |
 | `missed` | Incoming calls that no phone answered, newest first: time, number, reason |

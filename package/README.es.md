@@ -24,7 +24,7 @@ mudi-volte version
 
 | Comando | Qué hace |
 |---|---|
-| `setup` | Revisa el router, el módem y la SIM, crea una cuenta de teléfono, cambia el módem al modo External VoLTE con voz solo sobre IMS, desactiva el modo de suspensión del router y reinicia el router una vez. Cuando el módem rechaza un valor, setup restablece lo que escribió y falla: sin reinicio, y el servicio y la configuración de suspensión quedan como estaban. `-y` responde la pregunta por sí mismo |
+| `setup` | Revisa el router, el módem y la SIM, crea una cuenta de teléfono, cambia el módem al modo External VoLTE con voz solo sobre IMS, desactiva el modo de suspensión del router y reinicia el router una vez. Cuando el módem rechaza un valor, setup restablece lo que escribió y falla: sin reinicio, y el servicio y la configuración de suspensión quedan como estaban. `-y` responde la pregunta por sí mismo. Setup también muestra el código de país para los números marcados con un 0 inicial: `mudi-volte.main.country` si ya está definido; si no, el código del MCC de la SIM, que guarda ahí (los códigos de Latinoamérica y el Caribe aún están por verificar contra UIT-T E.212/E.164; si falta o está mal, define el correcto con `uci`) |
 | `setup --lte-only` | Además mantiene el módem en 4G/5G. Rara vez es necesario: cuesta el internet donde solo llega 3G. `--keep-3g` es el valor por defecto |
 | `status` | Si la SIM está registrada, qué teléfonos están conectados, cuántas llamadas se perdieron |
 | `missed` | Llamadas entrantes que ningún teléfono contestó, de la más reciente a la más antigua: hora, número, motivo |
