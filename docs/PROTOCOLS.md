@@ -1048,6 +1048,12 @@ Path over the IMS PDN with an AMR-WB + G.711 + DTMF offer. Headers:
 - `P-Preferred-Identity: <first P-Associated-URI>` (§88 — the fix for 403).
 - `Accept-Contact: *;+g.3gpp.icsi-ref="urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel"`
 - `Supported: 100rel`
+- Request-URI and `To`: `tel:<number>`, the number in E.164 after the number plan
+  (`src/imsd/numbers.go`: `+`, `00`, a trunk 0 or `national_len` digits with `default_country`).
+  An emergency number of the plan stays as dialled (`tel:133`) and skips `dial_allow`; with
+  `emergency_urn` the Request-URI is `urn:service:sos[.<service>]` (RFC 5031) and `To` keeps
+  `tel:133` (`DialURI` in `volte/call`, also after a 422). Neither is an IMS emergency call (no
+  emergency registration, TS 24.229 §5.1.6); whether the operator routes either form is to verify.
 
 PRACK for reliable 18x (§88). ACK for 2xx (§88). CANCEL on hang-up before the 200 (§84).
 

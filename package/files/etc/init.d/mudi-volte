@@ -58,6 +58,13 @@ build_config() {
 	config_get incoming main incoming all
 	config_get dial main dial '*'
 	config_get country main country ''
+	# Number plan (see /etc/config/mudi-volte): national_len empty = the
+	# country's default; the emergency list empty = the country's.
+	local national_len
+	config_get national_len main national_len ''
+	config_get_bool EMERGENCY_URN main emergency_urn 0
+	EMERGENCY=''
+	config_list_foreach main emergency collect EMERGENCY
 	config_get codecs main codecs 'G722 PCMU PCMA'
 	config_get ring_sec main ring_sec 45
 	config_get echo_ext main echo_ext 600
@@ -139,6 +146,20 @@ build_config() {
 	add_list dial_allow $dial
 	set +f
 	json_add_string default_country "$country"
+	# Not a whole number (a typo): the country's default, as when unset.
+	# Without a country it means nothing (the daemon would refuse it and the
+	# bridge would not start): left out. A whole number out of range (3, -5)
+	# still stops the bridge, with the reason in logread.
+	[ -n "$country" ] || national_len=''
+	case "$national_len" in
+	'' | - | *[!0-9-]* | ?*-*) ;;
+	*) json_add_int national_len "$national_len" ;;
+	esac
+	if [ -n "$EMERGENCY" ]; then
+		# shellcheck disable=SC2086
+		add_list emergency $EMERGENCY
+	fi
+	json_add_boolean emergency_urn "$EMERGENCY_URN"
 	json_add_string echo_ext "$echo_ext"
 	json_add_int ring_sec "$ring_sec"
 	json_add_int provision_port "$provision_port"

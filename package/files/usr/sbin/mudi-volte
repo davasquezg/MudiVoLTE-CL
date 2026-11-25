@@ -423,7 +423,9 @@ check_device() {
 	pick_sim
 }
 
-# MCC → country calling code, for numbers dialled with a leading 0.
+# MCC → country calling code, for numbers dialled with a leading 0 and, in
+# a country without that 0 (Chile, 730 → 56), with the national number of
+# digits (sip.national_len in the daemon).
 country_code() {
 	case "$1" in
 	202) echo 30 ;; 204) echo 31 ;; 206) echo 32 ;; 208) echo 33 ;; 214) echo 34 ;;
@@ -438,6 +440,7 @@ country_code() {
 	334) echo 52 ;; 400) echo 994 ;; 401) echo 7 ;; 404 | 405) echo 91 ;; 424) echo 971 ;;
 	425) echo 972 ;; 440 | 441) echo 81 ;; 450) echo 82 ;; 460) echo 86 ;; 505) echo 61 ;;
 	520) echo 66 ;; 525) echo 65 ;; 530) echo 64 ;; 722) echo 54 ;; 724) echo 55 ;;
+	730) echo 56 ;;
 	esac
 }
 

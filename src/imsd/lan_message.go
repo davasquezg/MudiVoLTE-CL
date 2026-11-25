@@ -237,7 +237,7 @@ func (l *lanSIP) textToNumber(req *sip.Request, tx sip.ServerTransaction, user, 
 		l.respond(req, tx, 403, "SMS Off")
 		return
 	}
-	num, err := normalizeDialed(target, l.cfg.DefaultCountry)
+	num, err := normalizeDialed(target, l.cfg.plan())
 	if err != nil {
 		l.respond(req, tx, 484, "Address Incomplete")
 		return

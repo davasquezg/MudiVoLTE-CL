@@ -61,6 +61,53 @@ comandos AT, la llamada de datos IMS y la cola de SMS usan su suscripción).
 Las páginas web editan el mismo archivo. Después de `uci commit mudi-volte`, ejecuta
 `mudi-volte restart`.
 
+### Números
+
+Un número marcado en un teléfono va a la red en formato internacional (E.164)
+cuando el daemon puede deducirlo: `+…` y `00…` tal cual; con `country`
+definido, un número que empieza con 0 recibe el código de país en lugar del 0
+(`07700900456` → `+447700900456` para 44), y un número de exactamente
+`national_len` dígitos recibe `+` y el código de país (`912345678` →
+`+56912345678`). `national_len` toma su valor del país: 9 para Chile (56),
+donde todos los números tienen 9 dígitos y no hay prefijo troncal 0 (según el
+artículo de Wikipedia sobre la numeración chilena, sin contrastar con un
+documento de Subtel); ninguna regla así para otros países. `-1` la desactiva;
+sin país se ignora, y un valor que el daemon rechaza (de 1 a 3, menor que -1 o
+más de 15 dígitos con el código de país) detiene el puente de teléfonos, con el
+motivo en `logread`. La configuración inicial (setup) completa `country` desde
+la SIM (el MCC 730 es 56); una instalación configurada antes de eso necesita
+`uci set mudi-volte.main.country=56` una vez.
+Los números más cortos (`149`, la prueba de eco) quedan tal como se marcaron.
+Un número especial de 9 dígitos (600, 800) también recibe `+56`: falta
+verificar en el router si la red los acepta en esa forma.
+
+- `dial` compara con ese formato internacional: `'+56'` permite `912345678` y
+  bloquea `+447700900456`; un número corto debe aparecer tal cual
+  (`'+56 149'`). Un SMS a un número sale igual, como número internacional
+  (`To_TOA`).
+- `allow` (llamadas entrantes) lee la lista y el identificador de quien llama
+  con las mismas reglas, así que `+56912345678` en la lista coincide con un
+  identificador `912345678` y al revés. Sin país, un identificador de 9 dígitos
+  o más también coincide con el final de una entrada más larga. Un número
+  oculto nunca coincide.
+- Los números de emergencia (`list emergency`; sin definir = la lista del país,
+  para Chile 131 SAMU, 132 Bomberos, 133 Carabineros, 134 PDI, 136 Socorro
+  Andino, 137 rescate marítimo, 138 rescate aéreo, 112 y 911, según Wikipedia,
+  sin una fuente oficial chilena encontrada) se permiten siempre, diga lo que
+  diga `dial`, nunca reciben el código de país y quedan en el log como
+  `EMERGENCY`; se rechaza que el usuario de un teléfono o la prueba de eco
+  use uno de ellos. Ningún otro país tiene una lista por defecto: agrega la tuya con
+  `list emergency`. Salen como una llamada común a `tel:<número>`, que la red
+  puede reconocer o no como emergencia; **no** es una llamada de emergencia IMS
+  (no hay registro de emergencia). Las líneas de ayuda (139, 147, 149) no están
+  en la lista y siguen a `dial`.
+- `emergency_urn '1'` las dirige a `urn:service:sos` (RFC 5031; con
+  `'133=police'` en la lista, `urn:service:sos.police`) con el número marcado
+  en `To`. Desactivada por defecto y sin probar: falta verificarla con el
+  operador. Una red que exige un registro de emergencia puede rechazar la
+  llamada (por ejemplo con `380 Alternative Service`), y el teléfono lo recibe
+  como fallo de la llamada.
+
 ## Idiomas
 
 Los textos están en inglés. Un paquete de traducción, `mudi-volte-i18n-<idioma>`

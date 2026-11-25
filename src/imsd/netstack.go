@@ -159,15 +159,16 @@ func (st *netStack) bindRTP() (*net.UDPConn, error) {
 }
 
 // Dial places an outgoing call to the network; it returns on answer, failure
-// or cancellation of ctx.
-func (st *netStack) Dial(ctx context.Context, to string) (imsCall, error) {
+// or cancellation of ctx. requestURI other than "" addresses the INVITE to it,
+// with to in the To header.
+func (st *netStack) Dial(ctx context.Context, to, requestURI string) (imsCall, error) {
 	rtp, err := st.bindRTP()
 	if err != nil {
 		return nil, err
 	}
 	local := rtp.LocalAddr().(*net.UDPAddr).AddrPort()
 	var nc *netCall
-	c, err := st.calls.DialWith(to, local, func(c *call.Call) {
+	c, err := st.calls.DialURI(requestURI, to, local, func(c *call.Call) {
 		nc = newNetCall(st, c, CallOutgoing)
 		nc.rtp = rtp
 		st.remember(nc)

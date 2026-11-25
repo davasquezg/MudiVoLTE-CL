@@ -77,14 +77,14 @@ func (n *netSwitch) set(st *netStack) {
 	n.mu.Unlock()
 }
 
-func (n *netSwitch) Dial(ctx context.Context, to string) (imsCall, error) {
+func (n *netSwitch) Dial(ctx context.Context, to, requestURI string) (imsCall, error) {
 	n.mu.Lock()
 	st := n.st
 	n.mu.Unlock()
 	if st == nil {
 		return nil, &dialError{Code: 503, Reason: "Service Unavailable"}
 	}
-	return st.Dial(ctx, to)
+	return st.Dial(ctx, to, requestURI)
 }
 
 type service struct {
