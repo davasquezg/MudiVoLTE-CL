@@ -1342,6 +1342,33 @@ second SIM receives in the same directory, under `Slot: 2` (§118).
   phone stays registered. A phone that is away gets the SMS when it registers again, within
   7 days.
 
+A message from a phone to a number goes to smsd's `outgoing` spool as GL's `sendsms` writes it
+(`queue`). The encoding (`gsmSeptets`, `smsEncoding`, `smsParts`):
+
+- `Alphabet: UTF-8` and the text as it is when every character is in the GSM 7-bit default
+  alphabet or its extension table (TS 23.038 §6.2.1, the table of `volte/sms/gsm7.go`): plain
+  ASCII except the backquote, and ñ Ñ é É ü Ü ¿ ¡ à è ì ò ù Ç ä ö Ä Ö Å å Æ æ Ø ø ß £ ¥ § €. 160
+  septets in one SMS, 153 per part; `€ [ ] { } ^ ~ \ |` take two (the escape and the code).
+- `Alphabet: UCS` and big-endian UTF-16 otherwise: 70 units in one SMS, 67 per part. á í ó ú
+  (and Á Í Ó Ú) are not in the default alphabet, so "canción" goes as UCS-2.
+- Left out of the GSM alphabet on purpose, so they go as UCS-2 as before: the Greek capitals and
+  ¤, which ISO-8859-15 lacks, and the form feed. smsd gets UTF-8 and does the mapping to septets
+  itself; that it passes through ISO-8859-15 (smstools' character set for text, as `spoolText`
+  reads received GSM text) is not verified. € rests on the same guess: ISO-8859-15 has it at
+  0xA4, where ISO-8859-1 has ¤. If smsd goes through ISO-8859-1 instead, € and ¤ swap places:
+  ¤ would be fine and € could become `?` or be dropped. Before this change a text with € went as
+  UCS-2, so € is the one character this change can newly break.
+- A part ends early rather than split an escape from its character or a surrogate pair. smsd
+  splits the text itself; the daemon counts the parts only for the limit (10, else `513`) and
+  the log.
+- To verify on the router, "100€" first: that GL's smsd sends a UTF-8 text with ñ or € in the
+  GSM alphabet (not as UCS-2, not with `?`), and that the phone at the other end shows it right.
+  The smstools3 file format documentation could not be checked for this change.
+- Not done: the Spanish national language single shift table (TS 23.038 Annex A.2.2), which
+  would put á í ó ú in the GSM alphabet too. Every part would need a national language element
+  in its user data header, and smsd does the septets and the splitting, so smsd would have to
+  add it; whether GL's smsd can is not known.
+
 A message from one phone to another, by login or short number (`textToPhone`), waits for the
 addressee inside the sender's own transaction:
 

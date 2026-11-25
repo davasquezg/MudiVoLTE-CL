@@ -152,6 +152,15 @@ decidido en 20 segundos (en ese caso, una falla posterior le llega al teléfono 
 mensaje). Las notificaciones de escritura y los acuses de entrega se aceptan y se descartan;
 los archivos reciben `415`.
 
+Un texto cuyos caracteres están todos en el alfabeto GSM de 7 bits va como
+`Alphabet: UTF-8`, 160 caracteres por SMS (153 por parte de uno más largo;
+`€ [ ] { } ^ ~ \ |` cuentan doble). Ese alfabeto tiene ñ, é, ü, ¿ y ¡, pero no á, í, ó ni ú: una
+de esas hace que todo el texto vaya como UCS, 70 caracteres por SMS (67 por parte).
+"¿Vienes mañana?" cabe en un SMS de 160; "¿Dónde estás?" va como UCS. Falta
+verificar en el router que el smsd de GL envíe de verdad ñ y € en el alfabeto GSM,
+primero con "100€": € es el único carácter que antes iba como UCS
+(ver [docs/PROTOCOLS.es.md](../docs/PROTOCOLS.es.md#sms-a-los-teléfonos-100-119)).
+
 ## Códigos QR y enlaces de configuración
 
 El código QR de un teléfono enlaza a `http://<router>:8060/p/<token>`, donde el router
