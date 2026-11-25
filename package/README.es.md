@@ -344,5 +344,5 @@ corrección no mueve.
 | `po/` | Traducciones: `templates/mudi-volte.pot` (generado desde el código), `<idioma>/mudi-volte.po` y `<idioma>/mudi-screen-volte.tsv` para la app de pantalla (formato de catálogo de MudiScreen) |
 | `files/` | Todo lo que se instala en el router excepto el binario y los archivos de licencia; `build.sh` comprime con gzip `www/views/` como lo espera el panel de administración de GL |
 | `tests/` | `run.sh`: la página del panel de administración de GL con Vue 2 en node, y la página de LuCI con los módulos de LuCI como stubs (requiere node y npm) |
-| `toolchain/` | Toolchain de musl y bibliotecas AMR-WB para la compilación estática, el recolector de licencias e `i18n.py` (extrae, actualiza, revisa y construye las traducciones) |
+| `toolchain/` | Toolchain de musl y bibliotecas AMR-WB y AMR para la compilación estática, el recolector de licencias e `i18n.py` (extrae, actualiza, revisa y construye las traducciones) |
 | `THIRD_PARTY.md`, `licenses/` | Componentes de terceros dentro de `mudi-imsd` y sus textos de licencia |

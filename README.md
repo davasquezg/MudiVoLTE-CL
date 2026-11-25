@@ -518,8 +518,13 @@ The RG650V has a mode that Quectel calls "External VoLTE Stack": the modem
 switches off its own IMS client and hands the SIM and the operator's IMS
 connection to the host. `mudi-imsd`, the daemon in this package, is that client.
 It authenticates with the SIM (IMS AKA), registers with the operator over IPsec,
-answers and places calls (SIP, AMR-WB and G.711) and bridges them to the
-phones on the router's Wi-Fi (SIP, G.722 and G.711).
+answers and places calls (SIP, AMR-WB, AMR and G.711) and bridges them to the
+phones on the router's Wi-Fi (SIP, G.722 and G.711). AMR (narrowband) is used
+when the caller offers it before G.711 and without AMR-WB, for example an
+interconnect to another network; calls that offer AMR before PCMU, and that were
+answered with PCMU so far, now get AMR. AMR has not been tried on a live call
+yet (to verify on the router); to go back to G.711 only, set the top-level
+`"codecs": ["AMR-WB", "PCMA", "PCMU"]` in the daemon's JSON config.
 
 ```
  Linphone ──── Wi-Fi: SIP, RTP ────> mudi-imsd ──── IMS: SIP over IPsec, RTP ────> operator
@@ -579,10 +584,10 @@ package/build.sh          # dist/: the .ipk, install.sh and SHA256SUMS
 ```
 
 `build-static.sh` builds `mudi-imsd` as a fully static binary with musl and
-the AMR-WB codec inside, and `mudi-dsi-helper` linked against musl the dynamic
+the AMR-WB and AMR codecs inside, and `mudi-dsi-helper` linked against musl the dynamic
 way: it has to load a library of the firmware. To install your own build, copy
 `dist/install.sh` and the `.ipk` to the router as in "No internet on the
-router" above. `scripts/build-imsd.sh` is a quicker build without the codec,
+router" above. `scripts/build-imsd.sh` is a quicker build without the codecs,
 for development: its network side offers only G.711. The fork's releases
 are built on GitHub by `.github/workflows/release.yml` (see
 [CONTRIBUTING.md](CONTRIBUTING.md#releases)).

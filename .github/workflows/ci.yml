@@ -3,7 +3,7 @@
 # tests, a cross-build for the router), the data-call helper (its tests
 # against a stand-in for the firmware's library), the shell scripts, the GL
 # admin panel page, the syntax of its Lua and the translations. The static
-# release build (musl, AMR-WB linked in) needs an arm64 Debian host: it runs
+# release build (musl, AMR-WB and AMR linked in) needs an arm64 Debian host: it runs
 # in release.yml, or by hand with scripts/build-static.sh.
 name: CI
 
@@ -25,10 +25,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: src/imsd/go.mod
-      - name: AMR-WB codec and ffmpeg for the media tests
+      - name: AMR-WB and AMR codecs and ffmpeg for the media tests
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libopencore-amrwb-dev libvo-amrwbenc-dev ffmpeg
+          sudo apt-get install -y --no-install-recommends libopencore-amrwb-dev libvo-amrwbenc-dev libopencore-amrnb-dev ffmpeg
       - name: volte library
         working-directory: volte
         run: |

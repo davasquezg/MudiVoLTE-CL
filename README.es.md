@@ -571,8 +571,14 @@ El RG650V tiene un modo que Quectel llama "External VoLTE Stack": el módem
 desactiva su propio cliente IMS y le entrega la SIM y la conexión IMS del
 operador al host. `mudi-imsd`, el daemon de este paquete, es ese cliente. Se
 autentica con la SIM (IMS AKA), se registra con el operador sobre IPsec,
-contesta y hace llamadas (SIP, AMR-WB y G.711) y las conecta con los teléfonos
-en el Wi-Fi del router (SIP, G.722 y G.711).
+contesta y hace llamadas (SIP, AMR-WB, AMR y G.711) y las conecta con los teléfonos
+en el Wi-Fi del router (SIP, G.722 y G.711). AMR (banda angosta) se usa cuando
+quien llama lo ofrece antes que G.711 y sin AMR-WB, por ejemplo una
+interconexión con otra red; las llamadas que ofrecen AMR antes que PCMU, y que
+hasta ahora se contestaban con PCMU, ahora quedan en AMR. AMR todavía no se ha
+probado en una llamada real (queda por verificar en el router); para volver a
+solo G.711, define en la configuración JSON del daemon la clave de nivel superior
+`"codecs": ["AMR-WB", "PCMA", "PCMU"]`.
 
 ```
  Linphone ──── Wi-Fi: SIP, RTP ────> mudi-imsd ──── IMS: SIP over IPsec, RTP ────> operator
@@ -635,11 +641,11 @@ package/build.sh          # dist/: el .ipk, install.sh y SHA256SUMS
 ```
 
 `build-static.sh` compila `mudi-imsd` como un binario completamente estático con
-musl y con el códec AMR-WB incluido, y `mudi-dsi-helper` enlazado contra musl de
+musl y con los códecs AMR-WB y AMR incluidos, y `mudi-dsi-helper` enlazado contra musl de
 forma dinámica: tiene que cargar una biblioteca del firmware. Para instalar tu
 propia compilación, copia `dist/install.sh` y el `.ipk` al router como en "Sin
 internet en el router" más arriba. `scripts/build-imsd.sh` es una compilación
-más rápida sin el códec, para desarrollo: su lado de red ofrece solo G.711.
+más rápida sin los códecs, para desarrollo: su lado de red ofrece solo G.711.
 Las versiones publicadas del fork se construyen en GitHub con
 `.github/workflows/release.yml` (ver
 [CONTRIBUTING.es.md](CONTRIBUTING.es.md#versiones-publicadas)).

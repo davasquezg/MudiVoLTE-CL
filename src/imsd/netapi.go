@@ -31,7 +31,7 @@ const (
 // NetMedia is the negotiated audio stream of a network call.
 type NetMedia struct {
 	Negotiated  bool
-	Codec       string // AMR-WB | PCMA | PCMU
+	Codec       string // AMR-WB | AMR | PCMA | PCMU
 	PayloadType int
 	ClockRate   int
 	ModeSet     string

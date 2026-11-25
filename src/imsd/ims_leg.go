@@ -1,8 +1,9 @@
 package main
 
 // IMS leg of the bridge: RTP of the network call ↔ 16 kHz PCM in 20 ms
-// frames. Network codecs come from volte/media: AMR-WB (when linked in,
-// cgo) and G.711 A/μ; 8 kHz formats go through the resampler.
+// frames. Network codecs come from volte/media: AMR-WB and AMR (when linked
+// in, cgo) and G.711 A/μ; 8 kHz formats (AMR, G.711) go through the
+// resampler.
 
 import (
 	"context"

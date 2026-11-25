@@ -6,8 +6,8 @@
 #    needed), dpkg-deb -x into .cache/musl-root. The wrapper .cache/bin/musl-gcc
 #    and its specs are made from Debian's, with the absolute
 #    /usr/{lib,include}/aarch64-linux-musl paths rewritten into the unpacked tree.
-# 2. opencore-amr 0.1.6 (AMR-WB decoder) and vo-amrwbenc 0.1.3 (AMR-WB
-#    encoder): orig tarballs from the Debian pool. Their sha256 is pinned below
+# 2. opencore-amr 0.1.6 (AMR-NB encoder and decoder, AMR-WB decoder) and
+#    vo-amrwbenc 0.1.3 (AMR-WB encoder): orig tarballs from the Debian pool. Their sha256 is pinned below
 #    and must also match the Checksums-Sha256 line of the .dsc. Built with that
 #    musl-gcc, -O2, --enable-static --disable-shared, installed into
 #    .cache/sysroot/{lib,include}.
@@ -202,19 +202,29 @@ build_lib() {
 	echo "$key" >"$sysroot/.stamp-$name"
 }
 
-# opencore-amr: only the AMR-WB decoder is needed; its .cpp files are compiled
-# as C (--enable-compile-c is the default), so CXX is musl-gcc as well.
+# opencore-amr: the AMR-NB encoder and decoder (libopencore-amrnb.a) and the
+# AMR-WB decoder (libopencore-amrwb.a); all are on by default in its
+# configure, the explicit arguments also change the build key, so a cache
+# built without AMR-NB is rebuilt. Its .cpp files are compiled as C
+# (--enable-compile-c is the default), so CXX is musl-gcc as well.
 build_lib opencore-amr "$OPENCORE_TAR" "$OPENCORE_TAR_SHA256" opencore-amr-0.1.6 \
-	libopencore-amrwb.a --disable-amrnb-encoder --disable-amrnb-decoder
+	libopencore-amrnb.a --enable-amrnb-encoder --enable-amrnb-decoder
+[ -f "$sysroot/lib/libopencore-amrwb.a" ] || die "opencore-amr: no $sysroot/lib/libopencore-amrwb.a"
 build_lib vo-amrwbenc "$VOENC_TAR" "$VOENC_TAR_SHA256" vo-amrwbenc-0.1.3 libvo-amrwbenc.a
 
-# Check: the E_IF_*/D_IF_* interface is there, and a frame encodes and decodes
-# in a static musl binary.
+# Check: the E_IF_*/D_IF_* (AMR-WB) and Encoder_/Decoder_Interface_* (AMR-NB)
+# interfaces are there, and a frame of each codec encodes and decodes in one
+# static musl binary that links the three archives together, as mudi-imsd
+# does (clashing symbols would show up here).
 for s in E_IF_init E_IF_encode E_IF_exit; do
 	nm -g "$sysroot/lib/libvo-amrwbenc.a" | grep -q " T $s\$" || die "libvo-amrwbenc.a: no $s"
 done
 for s in D_IF_init D_IF_decode D_IF_exit; do
 	nm -g "$sysroot/lib/libopencore-amrwb.a" | grep -q " T $s\$" || die "libopencore-amrwb.a: no $s"
+done
+for s in Encoder_Interface_init Encoder_Interface_Encode Encoder_Interface_exit \
+	Decoder_Interface_init Decoder_Interface_Decode Decoder_Interface_exit; do
+	nm -g "$sysroot/lib/libopencore-amrnb.a" | grep -q " T $s\$" || die "libopencore-amrnb.a: no $s"
 done
 cat >"$t/amrwb.c" <<'EOF'
 #include <stdio.h>
@@ -224,6 +234,13 @@ void E_IF_exit(void *state);
 void *D_IF_init(void);
 void D_IF_decode(void *state, const unsigned char *bits, short *synth, int bfi);
 void D_IF_exit(void *state);
+/* opencore-amr 0.1.6 amrnb/interf_enc.h and interf_dec.h (enum Mode as int) */
+void *Encoder_Interface_init(int dtx);
+int Encoder_Interface_Encode(void *state, int mode, const short *speech, unsigned char *out, int forceSpeech);
+void Encoder_Interface_exit(void *state);
+void *Decoder_Interface_init(void);
+void Decoder_Interface_Decode(void *state, const unsigned char *in, short *out, int bfi);
+void Decoder_Interface_exit(void *state);
 
 int main(void)
 {
@@ -234,14 +251,19 @@ int main(void)
 	D_IF_decode(dec, frame, out, 0);
 	E_IF_exit(enc);
 	D_IF_exit(dec);
-	printf("%d\n", n);
+	void *nenc = Encoder_Interface_init(0), *ndec = Decoder_Interface_init();
+	int nn = Encoder_Interface_Encode(nenc, 7, pcm, frame, 0); /* 12.2 kbit/s: 1 + 31 bytes */
+	Decoder_Interface_Decode(ndec, frame, out, 0);
+	Encoder_Interface_exit(nenc);
+	Decoder_Interface_exit(ndec);
+	printf("%d %d\n", n, nn);
 	return 0;
 }
 EOF
-"$cc" -O2 -static -o "$t/amrwb" "$t/amrwb.c" -L"$sysroot/lib" -lopencore-amrwb -lvo-amrwbenc -lm
-[ "$("$t/amrwb")" = 61 ] || die "AMR-WB: test frame did not encode to 61 bytes"
+"$cc" -O2 -static -o "$t/amrwb" "$t/amrwb.c" -L"$sysroot/lib" -lopencore-amrnb -lopencore-amrwb -lvo-amrwbenc -lm
+[ "$("$t/amrwb")" = "61 32" ] || die "AMR-WB/AMR-NB: test frames did not encode to 61 and 32 bytes"
 
 say "done"
 echo "CC=$cc"
 echo "sysroot=$sysroot"
-ls -l "$sysroot/lib/libopencore-amrwb.a" "$sysroot/lib/libvo-amrwbenc.a"
+ls -l "$sysroot/lib/libopencore-amrnb.a" "$sysroot/lib/libopencore-amrwb.a" "$sysroot/lib/libvo-amrwbenc.a"
