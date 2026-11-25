@@ -15,7 +15,8 @@
 	// order, %% is a percent sign. NT(text) only marks a text for the
 	// catalog: it goes through T where it is shown. The language is
 	// mudi-volte.main.lang when set, else the panel's (its vue-i18n locale)
-	// or the browser's, when the router has a catalog for it.
+	// or the browser's, when the router has a catalog for it (or for its base
+	// language: es for es-CL).
 	var catalog = {};
 
 	function T(s) {
@@ -34,8 +35,14 @@
 		var langs = st && Array.isArray(st.langs) ? st.langs : [];
 		var want = (st && st.lang) || (vm.$i18n && vm.$i18n.locale) ||
 			(typeof navigator !== 'undefined' && navigator.language) || '';
-		want = String(want).toLowerCase().replace(/[-_].*$/, '');
-		return langs.indexOf(want) >= 0 ? want : '';
+		// The way the catalogs are named (es, es_cl): es-CL becomes es_cl. The
+		// full code first, then the base language: es-CL takes es_cl when the
+		// router has it, else es.
+		want = String(want).toLowerCase().replace(/[.@].*$/, '').replace(/-/g, '_');
+		if (want && langs.indexOf(want) >= 0)
+			return want;
+		want = want.replace(/_.*$/, '');
+		return want && langs.indexOf(want) >= 0 ? want : '';
 	}
 
 	var STYLE_ID = 'mudi-volte-style';
@@ -201,6 +208,10 @@
 		},
 
 		created: function () {
+			// The catalog belongs to the file, not to the page: a page opened
+			// again from the same evaluated file starts in English,
+			// like its lang, until refresh has loaded the language of now.
+			catalog = {};
 			injectStyle();
 			var self = this;
 			this.refresh();
