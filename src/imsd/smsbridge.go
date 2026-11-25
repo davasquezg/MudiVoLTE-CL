@@ -491,10 +491,14 @@ func failReason(raw []byte) string {
 // the text has to go as UCS-2. ñ Ñ é É ü Ü ¿ ¡ are in the alphabet; á í ó ú
 // are not. The text reaches smsd as UTF-8 and smsd maps it to septets, by
 // way of the ISO-8859-15 character set smstools uses for text (to verify on
-// the router). So of the alphabet this leaves out what ISO-8859-15 lacks, the
-// Greek capitals and ¤, and the form feed, as before: those go as UCS-2.
-// Whether GL's smsd sends ñ or € in the GSM alphabet, and not as UCS-2 or as
-// "?", is to verify on the router as well.
+// the router; spoolText reads stock smstools' GSM text as ISO-8859-15 too).
+// So of the alphabet this leaves out what ISO-8859-15 lacks, the Greek
+// capitals and ¤, and the form feed, as before: those go as UCS-2. € rests on
+// the same guess: it is in ISO-8859-15 (0xA4) but not in ISO-8859-1, where
+// 0xA4 is ¤. If smsd goes by way of ISO-8859-1 instead, € and ¤ swap places
+// and a text with € (UCS-2 before this table was used) could lose it. So
+// "100€" is the first thing to check on the router: that GL's smsd sends ñ
+// and € in the GSM alphabet, and not as UCS-2 or as "?".
 func gsmSeptets(r rune) int {
 	if r == '\f' || r == '¤' || r >= 0x391 && r <= 0x3a9 { // 0x391-0x3a9: the Greek capitals
 		return 0

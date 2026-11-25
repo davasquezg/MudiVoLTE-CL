@@ -1347,14 +1347,17 @@ de GL (`queue`). La codificación (`gsmSeptets`, `smsEncoding`, `smsParts`):
   (y Á Í Ó Ú) no están en el alfabeto por defecto, así que "canción" va en UCS-2.
 - Quedan fuera del alfabeto GSM a propósito, y van en UCS-2 como antes: las mayúsculas griegas y ¤,
   que ISO-8859-15 no tiene, y el salto de página (form feed). smsd recibe UTF-8 y hace él mismo la
-  conversión a septetos; que pase por ISO-8859-15 (el juego de caracteres de smstools para texto) no
-  está verificado.
+  conversión a septetos; que pase por ISO-8859-15 (el juego de caracteres de smstools para texto, como
+  `spoolText` lee el texto GSM recibido) no está verificado. € depende de la misma suposición:
+  ISO-8859-15 lo tiene en 0xA4, donde ISO-8859-1 tiene ¤. Si smsd pasa en cambio por ISO-8859-1, € y ¤
+  intercambian sus lugares: ¤ andaría bien y € podría quedar como `?` o perderse. Antes de este cambio
+  un texto con € iba en UCS-2, así que € es el único carácter que este cambio puede romper.
 - Una parte termina antes en vez de separar un escape de su carácter o un par sustituto (surrogate
   pair). smsd divide el texto él mismo; el daemon cuenta las partes solo para el límite (10, si no
   `513`) y el log.
-- Por verificar en el router: que el smsd de GL envíe un texto UTF-8 con ñ o € en el alfabeto GSM (no
-  en UCS-2, no con `?`), y que el teléfono del otro lado lo muestre bien. La documentación del formato
-  de archivo de smstools3 no se pudo revisar para este cambio.
+- Por verificar en el router, primero con "100€": que el smsd de GL envíe un texto UTF-8 con ñ o €
+  en el alfabeto GSM (no en UCS-2, no con `?`), y que el teléfono del otro lado lo muestre bien. La
+  documentación del formato de archivo de smstools3 no se pudo revisar para este cambio.
 - No implementado: la tabla de desplazamiento simple (single shift) nacional española (TS 23.038
   anexo A.2.2), que pondría también á í ó ú en el alfabeto GSM. Cada parte necesitaría un elemento de
   idioma nacional en su encabezado de datos de usuario (UDH), y es smsd quien arma los septetos y

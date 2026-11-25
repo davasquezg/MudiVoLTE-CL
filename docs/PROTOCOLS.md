@@ -1347,13 +1347,17 @@ A message from a phone to a number goes to smsd's `outgoing` spool as GL's `send
   (and Á Í Ó Ú) are not in the default alphabet, so "canción" goes as UCS-2.
 - Left out of the GSM alphabet on purpose, so they go as UCS-2 as before: the Greek capitals and
   ¤, which ISO-8859-15 lacks, and the form feed. smsd gets UTF-8 and does the mapping to septets
-  itself; that it passes through ISO-8859-15 (smstools' character set for text) is not verified.
+  itself; that it passes through ISO-8859-15 (smstools' character set for text, as `spoolText`
+  reads received GSM text) is not verified. € rests on the same guess: ISO-8859-15 has it at
+  0xA4, where ISO-8859-1 has ¤. If smsd goes through ISO-8859-1 instead, € and ¤ swap places:
+  ¤ would be fine and € could become `?` or be dropped. Before this change a text with € went as
+  UCS-2, so € is the one character this change can newly break.
 - A part ends early rather than split an escape from its character or a surrogate pair. smsd
   splits the text itself; the daemon counts the parts only for the limit (10, else `513`) and
   the log.
-- To verify on the router: that GL's smsd sends a UTF-8 text with ñ or € in the GSM alphabet
-  (not as UCS-2, not with `?`), and that the phone at the other end shows it right. The smstools3
-  file format documentation could not be checked for this change.
+- To verify on the router, "100€" first: that GL's smsd sends a UTF-8 text with ñ or € in the
+  GSM alphabet (not as UCS-2, not with `?`), and that the phone at the other end shows it right.
+  The smstools3 file format documentation could not be checked for this change.
 - Not done: the Spanish national language single shift table (TS 23.038 Annex A.2.2), which
   would put á í ó ú in the GSM alphabet too. Every part would need a national language element
   in its user data header, and smsd does the septets and the splitting, so smsd would have to

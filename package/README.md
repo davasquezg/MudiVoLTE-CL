@@ -110,7 +110,8 @@ A text whose characters are all in the GSM 7-bit alphabet goes as
 of those sends the whole text as UCS, 70 characters per SMS (67 per part).
 "¿Vienes mañana?" fits in one SMS of 160; "¿Dónde estás?" goes as UCS. That
 GL's smsd really sends ñ and € in the GSM alphabet is still to verify on the
-router (see [docs/PROTOCOLS.md](../docs/PROTOCOLS.md#sms-to-the-phones-100-119)).
+router, "100€" first: € is the one character that went as UCS before
+(see [docs/PROTOCOLS.md](../docs/PROTOCOLS.md#sms-to-the-phones-100-119)).
 
 ## QR codes and setup links
 
