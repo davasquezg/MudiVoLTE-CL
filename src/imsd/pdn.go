@@ -172,16 +172,16 @@ func ipv4Field(s string) net.IP {
 	return ip
 }
 
-// parseIMSProfile returns the cid of the profile with APN "ims" from a
-// +CGDCONT? reply; 0 when not found.
-func parseIMSProfile(out string) int {
+// parseIMSProfile returns the cid of the profile with the APN apn (any
+// case) from a +CGDCONT? reply; 0 when not found.
+func parseIMSProfile(out, apn string) int {
 	for _, line := range strings.Split(strings.ReplaceAll(out, "\r", "\n"), "\n") {
 		line = strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "+CGDCONT:") {
 			continue
 		}
 		f := strings.Split(line[len("+CGDCONT:"):], ",")
-		if len(f) < 3 || !strings.EqualFold(strings.Trim(strings.TrimSpace(f[2]), "\""), "ims") {
+		if len(f) < 3 || !strings.EqualFold(strings.Trim(strings.TrimSpace(f[2]), "\""), apn) {
 			continue
 		}
 		if cid, err := strconv.Atoi(strings.TrimSpace(f[0])); err == nil && cid > 0 {

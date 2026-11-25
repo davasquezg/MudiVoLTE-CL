@@ -61,6 +61,33 @@ data call and the SMS spool use its subscription).
 The web pages edit the same file. After `uci commit mudi-volte` run
 `mudi-volte restart`.
 
+For a network that needs them, the file also has operator settings, commented
+out: unset or empty means automatic, from the network, the modem and the SIM.
+
+| UCI option | Daemon field | What it sets | Unset |
+|---|---|---|---|
+| `list pcscf` | `pcscf` | P-CSCF addresses (IPv4) in the order to try | the ones the network announces (CGCONTRDP) |
+| `pcscf_port` | `pcscf_port` | port of the first, unprotected REGISTER | 5060 |
+| `domain` | `domain` | IMS home domain | from the ISIM, else made from the IMSI |
+| `imei` | `imei` | IMEI given to the network (15 digits) | the modem's (CGSN) |
+| `smsc` | `smsc` | SMS service centre (+ and up to 15 digits) | from the SIM, else from the first incoming SMS |
+| `network_codecs` | `codecs` | codecs offered to the network, best first: `AMR-WB`, `PCMA`, `PCMU` | all of them (`codecs` is the phones' list) |
+| `ims_apn` | `ims_apn` | APN of the modem profile used for IMS | `ims` |
+| `ims_profile` | `ims_profile` | that profile's number (cid), without looking for the APN | the profile with `ims_apn`, else 2 |
+| `list ipsec_offer` | `ipsec_offers` | IPsec algorithm pairs offered to the P-CSCF, best first, as `integrity/encryption` | all six, see below |
+| `loose_inbound_src_port` | `loose_inbound_src_port` | 0 pins the P-CSCF source port in the inbound IPsec policies | not pinned |
+
+The IPsec pairs are `hmac-md5-96` or `hmac-sha-1-96` with `null`, `aes-cbc` or
+`des-ede3-cbc`. Unset, the daemon offers all six, `hmac-md5-96/null` first (the
+only one offered before, and the one the tested network chose), then
+`hmac-sha-1-96/null`, then the pairs with encryption. Those have not been tried
+on a live network: should registration fail while installing the IPsec SAs
+after the network chose a cipher, offer only the two pairs without one.
+The daemon checks these values when it starts: with one it cannot use it does not
+start, and names the option in the log and in `mudi-volte status` (a `pcscf_port`
+or `ims_profile` that is not a number only in the log). The log also says
+which modem profile it took for IMS and why.
+
 ## Languages
 
 The texts are English. A translation package, `mudi-volte-i18n-<lang>` (for
@@ -199,7 +226,8 @@ awake: the touch panel reports only to the stock app.
 The init script turns the UCI settings into `/var/run/mudi-volte/imsd.json`
 and starts `mudi-imsd -mode service -config` with it (`/etc/init.d/mudi-volte
 json` prints the same; it holds the phones' passwords). The daemon reads a
-few fields the package never writes. They serve development on a router
+few fields the package never writes (the operator settings above it writes
+only when they are set). They serve development on a router
 without phones, with a config of one's own and `-mode daemon` or `-mode
 register-once` (the header of `src/imsd/main.go` lists the modes):
 

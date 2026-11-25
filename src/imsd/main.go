@@ -102,15 +102,10 @@ func runMode(cfg *Config, logger *slog.Logger, hold bool) error {
 // stack on stubs. Not a single AT command and not a single packet to the
 // network.
 func runCheck(cfg *Config, logger *slog.Logger) error {
-	for _, s := range cfg.PCSCF {
-		if net.ParseIP(s) == nil {
-			return fmt.Errorf("check: pcscf %q is not an IP address", s)
-		}
-	}
 	if t := cfg.IPsecTool; t != "" && t != "netlink" && t != "ip" {
 		return fmt.Errorf("check: ipsec_tool %q is neither netlink nor ip", t)
 	}
-	if err := cfg.checkIMSProfile(); err != nil {
+	if err := cfg.check(); err != nil {
 		return fmt.Errorf("check: %w", err)
 	}
 	pcscf := cfg.pcscfIPs()
@@ -206,6 +201,8 @@ func regConfig(cfg *Config, ids identities, imei string, ue netip.Addr, pcscf []
 	if cfg.IPsecTool == "ip" {
 		rc.IPsec = ipsec.ExecRunner{} // netlink otherwise (the library's default)
 	}
+	// Checked when the config was loaded; reg.New rejects it otherwise.
+	rc.Offers, _ = cfg.ipsecOffers()
 	return rc
 }
 
@@ -267,16 +264,25 @@ func newATLink() *ATLink {
 	return &ATLink{Run: ubusAT(12 * time.Second), Retries: 4, Timeout: 12 * time.Second}
 }
 
-// imsProfile returns the cid of the IMS APN: from the config, else the
-// profile with APN "ims" in CGDCONT, else 2 (as on the tested Mudi, §71).
-func imsProfile(ctx context.Context, cfg *Config, link *ATLink) int {
+// imsProfile returns the cid of the IMS APN: from the config (ims_profile),
+// else the profile with the APN ims_apn ("ims") in CGDCONT, else 2 (as on
+// the tested Mudi, §71). The log tells which one and why.
+func imsProfile(ctx context.Context, cfg *Config, link *ATLink, logger *slog.Logger) int {
 	if cfg.IMSProfile > 0 {
+		logger.Info("IMS profile", "cid", cfg.IMSProfile, "from", "ims_profile")
 		return cfg.IMSProfile
 	}
-	if out, err := link.query(ctx, "AT+CGDCONT?"); err == nil {
-		if cid := parseIMSProfile(out); cid > 0 {
+	apn := cfg.imsAPN()
+	out, err := link.query(ctx, "AT+CGDCONT?")
+	if err == nil {
+		if cid := parseIMSProfile(out, apn); cid > 0 {
+			logger.Info("IMS profile", "cid", cid, "apn", apn, "from", "CGDCONT")
 			return cid
 		}
+		logger.Warn("IMS profile: no profile with the APN in CGDCONT, trying cid 2; set ims_apn or ims_profile",
+			"apn", apn, "cid", 2)
+	} else {
+		logger.Warn("IMS profile: CGDCONT failed, trying cid 2", "apn", apn, "cid", 2, "err", err)
 	}
 	return 2
 }
@@ -326,9 +332,12 @@ func discoverPDN(ctx context.Context, cfg *Config, link *ATLink, profile int, lo
 // buildLiveStack sets up the live stack on top of an IMS PDN that is already
 // up (the daemon and register-once modes). It sends nothing to the network.
 func buildLiveStack(cfg *Config, logger *slog.Logger) (*netStack, error) {
+	if err := cfg.check(); err != nil {
+		return nil, err
+	}
 	link := newATLink()
 	ctx := context.Background()
-	env, err := discoverPDN(ctx, cfg, link, imsProfile(ctx, cfg, link), logger)
+	env, err := discoverPDN(ctx, cfg, link, imsProfile(ctx, cfg, link, logger), logger)
 	if err != nil {
 		return nil, err
 	}

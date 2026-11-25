@@ -6,13 +6,16 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/xarvel/MudiVoLTE/volte/media"
+	"github.com/xarvel/MudiVoLTE/volte/reg"
 	"github.com/xarvel/MudiVoLTE/volte/sms"
 )
 
@@ -246,11 +249,54 @@ func TestParseCGCONTRDP(t *testing.T) {
 
 func TestParseIMSProfile(t *testing.T) {
 	out := "\r\n+CGDCONT: 1,\"IPV4V6\",\"internet\",\"0.0.0.0\",0,0\r\n+CGDCONT: 2,\"IPV4V6\",\"ims\",\"0.0.0.0\",0,0\r\n+CGDCONT: 3,\"IPV4V6\",\"sos\",\"\",0,0\r\n\r\nOK\r\n"
-	if cid := parseIMSProfile(out); cid != 2 {
+	if cid := parseIMSProfile(out, "ims"); cid != 2 {
 		t.Fatalf("cid = %d", cid)
 	}
-	if cid := parseIMSProfile("+CGDCONT: 1,\"IP\",\"internet\"\r\nOK"); cid != 0 {
+	if cid := parseIMSProfile("+CGDCONT: 1,\"IP\",\"internet\"\r\nOK", "ims"); cid != 0 {
 		t.Fatalf("without ims: %d", cid)
+	}
+	// ims_apn names another APN: its profile, in any case, not the "ims" one.
+	other := "+CGDCONT: 1,\"IP\",\"internet\"\r\n+CGDCONT: 2,\"IPV4V6\",\"ims\"\r\n+CGDCONT: 4,\"IPV4V6\",\"IMS.operator\"\r\nOK"
+	if cid := parseIMSProfile(other, "ims.operator"); cid != 4 {
+		t.Fatalf("ims_apn ims.operator: cid = %d", cid)
+	}
+	if cid := parseIMSProfile(out, "ims.operator"); cid != 0 {
+		t.Fatalf("ims_apn missing: cid = %d", cid)
+	}
+}
+
+// imsProfile takes ims_profile, else the profile of ims_apn, else 2, and
+// says in the log which and why.
+func TestIMSProfileChoiceIsLogged(t *testing.T) {
+	reply := "+QUIMSUB: 1\r\n+CGDCONT: 1,\"IP\",\"internet\"\r\n+CGDCONT: 3,\"IPV4V6\",\"ims.operator\"\r\nOK"
+	for _, tc := range []struct {
+		name string
+		cfg  Config
+		err  error // of every AT line
+		cid  int
+		log  []string
+	}{
+		{"configured", Config{IMSProfile: 5, IMSAPN: "ims.operator"}, nil, 5, []string{"cid=5", "from=ims_profile"}},
+		{"found", Config{IMSAPN: "ims.operator"}, nil, 3, []string{"cid=3", "apn=ims.operator", "from=CGDCONT"}},
+		{"missing", Config{}, nil, 2, []string{"level=WARN", "apn=ims", "cid=2", "ims_apn"}},
+		{"failed", Config{}, errors.New("modem busy"), 2, []string{"level=WARN", "CGDCONT failed", "cid=2", "modem busy"}},
+	} {
+		var buf strings.Builder
+		logger := slog.New(slog.NewTextHandler(&buf, nil))
+		link := &ATLink{Run: func(_ context.Context, cmd string) (string, error) {
+			if !strings.Contains(cmd, "CGDCONT?") && !strings.Contains(cmd, "QUIMSUB") {
+				t.Errorf("%s: command %q", tc.name, cmd)
+			}
+			return reply, tc.err
+		}, Retries: 1}
+		if cid := imsProfile(context.Background(), &tc.cfg, link, logger); cid != tc.cid {
+			t.Errorf("%s: cid %d, want %d", tc.name, cid, tc.cid)
+		}
+		for _, want := range tc.log {
+			if !strings.Contains(buf.String(), want) {
+				t.Errorf("%s: log %q lacks %q", tc.name, buf.String(), want)
+			}
+		}
 	}
 }
 
@@ -335,6 +381,74 @@ func TestLoadConfigDefaultsAndOverride(t *testing.T) {
 	if cfg2.Mode != "daemon" || len(cfg2.PCSCF) != 1 || cfg2.PCSCFPort != 5060 || cfg2.looseSrcPort() ||
 		cfg2.dsiHelper() != "/tmp/helper" {
 		t.Errorf("overlay: %+v", cfg2)
+	}
+}
+
+// The operator settings the package writes from UCI (#11): good values load
+// and reach the stack, bad ones fail the check the modes run first, with the
+// field named.
+func TestLoadConfigOperatorSettings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "c.json")
+	write := func(body string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(`{"pcscf":["192.0.2.28"],"pcscf_port":5070,"imei":"490154203237518","domain":"ims.mnc001.mcc001.3gppnetwork.org",` +
+		`"smsc":"+447700900000","codecs":["pcma","PCMU"],"ims_profile":3,"ims_apn":"ims.operator",` +
+		`"ipsec_offers":["hmac-sha-1-96/null","HMAC-MD5-96"]}`)
+	cfg, err := loadConfig(path)
+	if err == nil {
+		err = cfg.check()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PCSCFPort != 5070 || cfg.IMEI != "490154203237518" || cfg.SMSC != "+447700900000" || cfg.IMSProfile != 3 ||
+		cfg.imsAPN() != "ims.operator" || len(cfg.Codecs) != 2 {
+		t.Errorf("loaded: %+v", cfg)
+	}
+	rc := regConfig(cfg, identities{}, cfg.IMEI, netip.MustParseAddr("10.0.0.2"), cfg.pcscfIPs(), "", slog.Default())
+	if rc.PCSCF != netip.MustParseAddrPort("192.0.2.28:5070") {
+		t.Errorf("P-CSCF %v", rc.PCSCF)
+	}
+	if want := []reg.Offer{{Alg: "hmac-sha-1-96", Ealg: "null"}, {Alg: "hmac-md5-96", Ealg: "null"}}; !slices.Equal(rc.Offers, want) {
+		t.Errorf("offers %v, want %v", rc.Offers, want)
+	}
+	// Unset: the library's broad default offer and the "ims" APN.
+	if def := defaultConfig(); def.imsAPN() != "ims" {
+		t.Errorf("default ims_apn %q", def.imsAPN())
+	} else if rc := regConfig(def, identities{}, "", netip.MustParseAddr("10.0.0.2"), nil, "", slog.Default()); rc.Offers != nil {
+		t.Errorf("default offers %v", rc.Offers)
+	}
+
+	for _, tc := range []struct{ body, field string }{
+		{`{"pcscf":["not-an-ip"]}`, "pcscf"},
+		{`{"pcscf":["2001:db8::1"]}`, "IPv4"},
+		{`{"pcscf_port":70000}`, "pcscf_port"},
+		{`{"pcscf_port":-1}`, "pcscf_port"},
+		{`{"imei":"12345"}`, "imei"},
+		{`{"imei":"49015420323751x"}`, "imei"},
+		{`{"domain":"ims operator.example"}`, "domain"},
+		{`{"domain":"-ims.example"}`, "domain"},
+		{`{"smsc":"+44 7700"}`, "smsc"},
+		{`{"smsc":"+1234567890123456"}`, "smsc"},
+		{`{"codecs":["G722"]}`, "codecs"},
+		{`{"ims_profile":300}`, "ims_profile"},
+		{`{"ims_apn":"ims,2"}`, "ims_apn"},
+		{`{"ims_apn":"` + strings.Repeat("a.", 50) + `ims"}`, "ims_apn"},
+		{`{"ipsec_offers":["hmac-sha-256/null"]}`, "ipsec_offers"},
+		{`{"ipsec_offers":["hmac-md5-96/aes-gcm"]}`, "ipsec_offers"},
+	} {
+		write(tc.body)
+		cfg, err := loadConfig(path)
+		if err == nil {
+			err = cfg.check()
+		}
+		if err == nil || !strings.Contains(err.Error(), tc.field) {
+			t.Errorf("%s: %v, want an error naming %s", tc.body, err, tc.field)
+		}
 	}
 }
 

@@ -380,7 +380,9 @@ service after a crash: N in a row". Code: `src/imsd/crashes.go`.
 `mudi-volte setup` checks the helper and DSI API before touching the modem
 (`check_data_call` in `package/files/usr/sbin/mudi-volte`). There is no `data_call` option;
 the daemon's optional `dsi_helper` configuration key overrides the helper's executable path.
-The old `dsi_path` JSON key is ignored on upgrade. An `ims_profile` outside 0–255 ends the
+The old `dsi_path` JSON key is ignored on upgrade. An `ims_profile` outside 0–255, or another
+operator setting the daemon cannot use (`pcscf`, `pcscf_port`, `imei`, `domain`, `smsc`, `codecs`,
+`ims_apn`, `ipsec_offers`; see `package/README.md`), ends the
 service at its start, with the error in `mudi-volte status`: it is a mistake in the configuration,
 not a failure of the call (procd starts the service again every 10 s, to the same end; such an
 end does not count as a crash, it reaches no network).
@@ -401,7 +403,11 @@ AT+CGDCONT?
 # Find the line with APN "ims" → take the first field (cid, usually 2)
 ```
 
-Code: `parseIMSProfile` in `src/imsd/pdn.go`.
+The APN looked for is `ims_apn` (UCI option and JSON key; default `ims`, compared without case);
+`ims_profile` names the cid itself and skips the search. With neither found, the daemon tries
+cid 2 (the tested Mudi, §71). The log says which profile was taken and why (`IMS profile cid=…
+from=ims_profile`, `from=CGDCONT`, or a warning before cid 2).
+Code: `imsProfile` in `src/imsd/main.go`, `parseIMSProfile` in `src/imsd/pdn.go`.
 
 ### 2.3 AT+CGCONTRDP — IMS PDN parameters
 
@@ -780,7 +786,13 @@ UE                                  P-CSCF (192.0.2.28:5060)
 - **Connections**: the first REGISTER goes over plain TCP from an ephemeral port to P-CSCF:5060;
   after the 401 the daemon listens on `port-s`, installs the SAs and opens a protected connection
   from `port-c` → the P-CSCF's `port-s`. The protected REGISTER carries `Security-Verify` (an echo of `Security-Server`).
-- **Security-Client**: we offer `hmac-md5-96` / `null` (TS 33.203 §7). Every REGISTER over
+- **Security-Client**: one `ipsec-3gpp` mechanism per algorithm pair, best first, all with the
+  same SPIs and ports (TS 33.203 §7). By default every pair the IPsec layer installs:
+  `hmac-md5-96`/`null` (the only pair offered before, and the one the tested network chose),
+  `hmac-sha-1-96`/`null`, then the same two with `aes-cbc`, then with `des-ede3-cbc`. The UCI
+  list `ipsec_offer` (JSON `ipsec_offers`, `"alg/ealg"` strings) replaces the list. Of the
+  `Security-Server` the daemon takes only a mechanism whose pair it offered, the one with the
+  highest `q`, else the first (RFC 3329 §2.3; `auth.ChooseOffered`). Every REGISTER over
   the current SAs carries new SPIs and a new port-c, with the same port-s (see "Refresh and re-REGISTER" below).
 - **P-Access-Network-Info** (PANI): `3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=<PLMN><TAC><ECI>`.
   Mandatory: registration does not proceed when the access-network information cannot be built (§75).
@@ -802,8 +814,13 @@ UE                                  P-CSCF (192.0.2.28:5060)
 
 - `port-c` and `port-s` are our protected client and server ports (random, from
   20000–59999), announced in Security-Client. In the table they are also called `port-uc` and `port-us`.
-- Algorithms: `hmac-md5-96` for integrity (IK key, 16 bytes), `null` encryption.
-- Keys: IK from the AKA response for SA integrity; CK is ignored (ealg=null).
+- Algorithms: the pair the P-CSCF chose (above); on the tested network `hmac-md5-96` for
+  integrity, `null` encryption.
+- Keys (TS 33.203 Annex I, `auth.IntegrityKey` and `auth.EncryptionKey`): `hmac-md5-96` takes
+  IK (16 bytes), `hmac-sha-1-96` IK followed by 32 zero bits (20 bytes); `aes-cbc` takes CK
+  (16 bytes), `des-ede3-cbc` CK1 ‖ CK2 ‖ CK1 (24 bytes); with `null` CK is not used. The pairs with
+  encryption have not been seen on a live network yet: they need the kernel's `cbc(aes)` and
+  `cbc(des3_ede)` ciphers (to verify on the router).
 - Mode: transport (not tunnel).
 - Every state and policy template has `reqid 0x4d554449` (the ASCII word
   `MUDI`). It is an ownership tag shared by all MudiVoLTE SAs; the SPI still

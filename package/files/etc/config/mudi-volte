@@ -51,6 +51,35 @@ config voip 'main'
 	# Operator quirks: P-CSCF addresses in the order to try. Empty = the ones
 	# the network announces for the IMS connection.
 	# list pcscf '192.0.2.28'
+	# More operator settings, for a network that needs them; unset = automatic.
+	# The daemon refuses a value it cannot use and says why in the log.
+	# The P-CSCF port of the first, unprotected REGISTER (default 5060).
+	# option pcscf_port '5060'
+	# The IMS home domain; unset = from the ISIM, else made from the IMSI
+	# (ims.mncXXX.mccYYY.3gppnetwork.org).
+	# option domain 'ims.mnc001.mcc001.3gppnetwork.org'
+	# The IMEI given to the network (15 digits); unset = the modem's.
+	# option imei '490154203237518'
+	# The SMS service centre (+ and up to 15 digits); unset = from the SIM,
+	# else from the first incoming SMS.
+	# option smsc '+447700900000'
+	# Codecs offered to the network, best first (AMR-WB, PCMA, PCMU); unset =
+	# all three. Not the same as 'codecs' above, which is for the phones.
+	# option network_codecs 'AMR-WB PCMA PCMU'
+	# The IMS connection: the modem profile whose APN is ims_apn (unset =
+	# 'ims'), else profile 2; ims_profile names the profile number itself.
+	# option ims_apn 'ims'
+	# option ims_profile '2'
+	# IPsec algorithms offered to the P-CSCF, best first, as
+	# integrity/encryption: hmac-md5-96 or hmac-sha-1-96, and null, aes-cbc or
+	# des-ede3-cbc. Unset = all six pairs, starting with these two, the ones
+	# without encryption. Should registration fail while installing the
+	# IPsec SAs after the network chose a cipher, offer only these two.
+	# list ipsec_offer 'hmac-md5-96/null'
+	# list ipsec_offer 'hmac-sha-1-96/null'
+	# 0 pins the P-CSCF source port in the inbound IPsec policies; unset = not
+	# pinned, for a P-CSCF that sends from changing ports.
+	# option loose_inbound_src_port '0'
 	option log_level 'info'
 	# The SIM of the phone line: '1' (nano-SIM slot 1) or '2' (slot 2, or the
 	# built-in eSIM, which takes its place). Setup picks the first slot with a

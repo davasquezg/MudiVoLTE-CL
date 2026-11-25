@@ -189,6 +189,81 @@ build_config
         self.assertEqual(self.read("allowed").splitlines(),
                          ['+44 7700 900123', '+1 (555) 100-2222'])
 
+    # The operator settings of /etc/config/mudi-volte (#10, #11) reach the
+    # daemon's JSON under its own names; unset ones stay out of it, so the
+    # daemon finds them itself.
+    OPERATOR = r'''
+config_get() {
+ v=''
+ if [ -n "${OPS:-}" ]; then
+  case "$3" in
+  pcscf_port) v=${PORT:-5070} ;;
+  imei) v=490154203237518 ;;
+  domain) v=ims.mnc001.mcc001.3gppnetwork.org ;;
+  smsc) v=+447700900000 ;;
+  network_codecs) v='PCMA PCMU' ;;
+  ims_profile) v=3 ;;
+  ims_apn) v=ims.operator ;;
+  loose_inbound_src_port) v=0 ;;
+  esac
+ fi
+ [ -n "$v" ] || v=$4
+ eval "$1=\$v"
+}
+config_get_bool() { config_get "$@"; }
+config_foreach() { :; }
+config_list_foreach() {
+ [ "$2" = ipsec_offer ] && [ -n "${OPS:-}" ] || return 0
+ "$3" hmac-sha-1-96/null "${4:-}"
+ "$3" hmac-md5-96/aes-cbc "${4:-}"
+}
+obj=; array=
+json_init() { :; }
+json_add_object() { obj=$1; }
+json_close_object() { obj=; }
+json_add_array() { array=$1; }
+json_close_array() { array=; }
+json_add_string() { echo "$obj|$array|string $1=$2" >>"$SB/json"; }
+json_add_int() { echo "$obj|$array|int $1=$2" >>"$SB/json"; }
+json_add_boolean() { echo "$obj|$array|bool $1=$2" >>"$SB/json"; }
+json_dump() { :; }
+build_config
+'''
+
+    def build_json(self, **env):
+        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text()
+        init = init.replace(". /usr/share/libubox/jshn.sh", "")
+        r = self.run_case(init + self.OPERATOR, **env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return self.read("json").splitlines()
+
+    def test_init_maps_the_operator_settings(self):
+        lines = self.build_json(OPS="1")
+        for want in ("||int pcscf_port=5070", "||string imei=490154203237518",
+                     "||string domain=ims.mnc001.mcc001.3gppnetwork.org",
+                     "||string smsc=+447700900000", "||int ims_profile=3",
+                     "||string ims_apn=ims.operator",
+                     "||bool loose_inbound_src_port=0"):
+            self.assertIn(want, lines)
+        # The network's codecs at the top, the phones' ones in the sip block.
+        self.assertEqual([l for l in lines if l.startswith("|codecs|")],
+                         ["|codecs|string =PCMA", "|codecs|string =PCMU"])
+        self.assertIn("sip|codecs|string =G722", lines)
+        self.assertEqual([l for l in lines if l.startswith("|ipsec_offers|")],
+                         ["|ipsec_offers|string =hmac-sha-1-96/null",
+                          "|ipsec_offers|string =hmac-md5-96/aes-cbc"])
+
+    def test_init_leaves_unset_operator_settings_to_the_daemon(self):
+        lines = self.build_json()
+        for name in ("pcscf_port", "imei", "domain", "smsc", "ims_profile",
+                     "ims_apn", "loose_inbound_src_port"):
+            self.assertFalse([l for l in lines if l.split(" ", 1)[-1].startswith(name + "=")], name)
+        self.assertFalse([l for l in lines if l.startswith(("|codecs|", "|ipsec_offers|"))])
+
+    def test_init_passes_a_port_that_is_no_number_for_the_daemon_to_refuse(self):
+        lines = self.build_json(OPS="1", PORT="50x")
+        self.assertIn("||string pcscf_port=50x", lines)
+
     def test_setup_requires_the_dsi_api(self):
         for library in ("available", "missing", "missing-symbol"):
             with self.subTest(library=library):
