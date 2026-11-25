@@ -71,7 +71,11 @@ number with a leading 0 gets the country code instead of the 0 (`07700900456`
 defaults from the country: 9 for Chile (56), where every number has 9 digits
 and there is no trunk 0 (after the Wikipedia article on Chilean numbers, not
 checked against a Subtel document); no such rule for other countries. `-1`
-switches it off. Shorter numbers (`149`, the echo test) stay as dialled. A
+switches it off; without a country it is ignored, and another value the daemon
+refuses (1 to 3, below -1, or more than 15 digits with the country code) stops
+the phone bridge, with the reason in `logread`. Setup fills `country` from the
+SIM (MCC 730 is 56); an install set up before that needs
+`uci set mudi-volte.main.country=56` once. Shorter numbers (`149`, the echo test) stay as dialled. A
 9-digit special number (600, 800) gets `+56` as well: whether the network
 takes those in that form is to verify on the router.
 
@@ -86,7 +90,8 @@ takes those in that form is to verify on the router.
   131 SAMU, 132 Bomberos, 133 Carabineros, 134 PDI, 136 Socorro Andino, 137
   maritime rescue, 138 air rescue, 112 and 911, after Wikipedia, with no
   official Chilean source found) are always allowed whatever `dial` says, never
-  get the country code, and are logged as `EMERGENCY`. No other country has a
+  get the country code, and are logged as `EMERGENCY`; a phone's login or the
+  echo test on one of them is refused. No other country has a
   default list: add yours with `list emergency`. They go out as an ordinary
   call to `tel:<number>`, which the network may or may not recognise as an
   emergency; it is **not** an IMS emergency call (no emergency registration).

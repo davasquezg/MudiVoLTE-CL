@@ -71,7 +71,12 @@ definido, un número que empieza con 0 recibe el código de país en lugar del 0
 `+56912345678`). `national_len` toma su valor del país: 9 para Chile (56),
 donde todos los números tienen 9 dígitos y no hay prefijo troncal 0 (según el
 artículo de Wikipedia sobre la numeración chilena, sin contrastar con un
-documento de Subtel); ninguna regla así para otros países. `-1` la desactiva.
+documento de Subtel); ninguna regla así para otros países. `-1` la desactiva;
+sin país se ignora, y un valor que el daemon rechaza (de 1 a 3, menor que -1 o
+más de 15 dígitos con el código de país) detiene el puente de teléfonos, con el
+motivo en `logread`. La configuración inicial (setup) completa `country` desde
+la SIM (el MCC 730 es 56); una instalación configurada antes de eso necesita
+`uci set mudi-volte.main.country=56` una vez.
 Los números más cortos (`149`, la prueba de eco) quedan tal como se marcaron.
 Un número especial de 9 dígitos (600, 800) también recibe `+56`: falta
 verificar en el router si la red los acepta en esa forma.
@@ -90,7 +95,8 @@ verificar en el router si la red los acepta en esa forma.
   Andino, 137 rescate marítimo, 138 rescate aéreo, 112 y 911, según Wikipedia,
   sin una fuente oficial chilena encontrada) se permiten siempre, diga lo que
   diga `dial`, nunca reciben el código de país y quedan en el log como
-  `EMERGENCY`. Ningún otro país tiene una lista por defecto: agrega la tuya con
+  `EMERGENCY`; se rechaza que el usuario de un teléfono o la prueba de eco
+  use uno de ellos. Ningún otro país tiene una lista por defecto: agrega la tuya con
   `list emergency`. Salen como una llamada común a `tel:<número>`, que la red
   puede reconocer o no como emergencia; **no** es una llamada de emergencia IMS
   (no hay registro de emergencia). Las líneas de ayuda (139, 147, 149) no están

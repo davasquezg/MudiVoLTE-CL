@@ -198,6 +198,7 @@ build_config
 config_get() {
  case "$3" in
  national_len) eval "$1=\${NATIONAL_LEN-\$4}" ;;
+ country) eval "$1=\${COUNTRY-56}" ;;
  *) eval "$1=\$4" ;;
  esac
 }
@@ -225,6 +226,9 @@ build_config
             ({"NATIONAL_LEN": "-1"}, ["national_len -1", "emergency_urn 0"]),
             ({"NATIONAL_LEN": "nine"}, ["emergency_urn 0"]),
             ({"NATIONAL_LEN": "9-"}, ["emergency_urn 0"]),
+            # Without a country national_len means nothing: left out, so that
+            # the daemon does not refuse the config.
+            ({"NATIONAL_LEN": "9", "COUNTRY": ""}, ["emergency_urn 0"]),
         ]
         for env, want in cases:
             with self.subTest(env=env):
@@ -232,6 +236,15 @@ build_config
                 r = self.run_case(init + stubs, **env)
                 self.assertEqual(r.returncode, 0, r.stderr)
                 self.assertEqual(self.read("plan").splitlines(), want)
+
+    def test_country_code_from_the_mcc(self):
+        # Setup fills mudi-volte.main.country from the SIM's MCC: Chile (730)
+        # turns on the national number rule and the emergency list.
+        for mcc, want in (('730', '56'), ('234', '44'), ('724', '55'), ('999', '')):
+            with self.subTest(mcc=mcc):
+                r = self.run_case(f'country_code {mcc}')
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(r.stdout.strip(), want)
 
     def test_setup_requires_the_dsi_api(self):
         for library in ("available", "missing", "missing-symbol"):

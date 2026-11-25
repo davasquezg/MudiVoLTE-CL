@@ -15,11 +15,14 @@ config voip 'main'
 	option dial '*'
 	# Country code for numbers dialled with a leading 0 (e.g. 44 for the UK),
 	# or, in a country without that 0, dialled with 'national_len' digits.
-	# Filled in by setup from the SIM.
+	# Filled in by setup from the SIM (MCC 730 is 56, Chile); an install made
+	# before setup knew Chile needs: uci set mudi-volte.main.country=56
 	option country ''
 	# Digits of a national number dialled without a leading 0, which then gets
 	# '+' and the country code: unset = the country's default (9 for Chile,
-	# 56; none for other countries), -1 = off.
+	# 56; none for other countries), -1 = off. Ignored without 'country'.
+	# 1 to 3, below -1, or over 15 digits with the country code stops the
+	# phone bridge: the reason is in logread.
 	# option national_len '9'
 	# Emergency numbers: always allowed whatever 'dial' says, never given the
 	# country code. Unset = the country's list (Chile: 131 132 133 134 136

@@ -26,8 +26,9 @@ call answered on an iPhone woken by a push.
 > **Before you start.** Emergency numbers (112, 911, 999 and the like; in
 > Chile 131 SAMU, 132 Bomberos, 133 Carabineros, 134 PDI, 136, 137 and 138)
 > are not guaranteed to work through MudiVoLTE: keep a phone with its own SIM
-> for them. MudiVoLTE lets them through whatever `dial` says, but places them
-> as an ordinary call, not as an IMS emergency call (see
+> for them. MudiVoLTE lets them through whatever `dial` says (in Chile with
+> `country` 56, which setup fills from a Chilean SIM), but places them as an
+> ordinary call, not as an IMS emergency call (see
 > [package/README.md](package/README.md#numbers)). Running the operator's IMS client on a router may be against the
 > terms of your mobile contract; check them. MudiVoLTE is a personal project,
 > tested with one operator, and comes without any warranty (see

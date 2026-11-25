@@ -29,8 +29,10 @@ despertado por una notificación push.
 > **Antes de empezar.** No se garantiza que los números de emergencia (112, 911,
 > 999 y similares; en Chile 131 SAMU, 132 Bomberos, 133 Carabineros, 134 PDI,
 > 136, 137 y 138) funcionen a través de MudiVoLTE: mantén un teléfono con su
-> propia SIM para ellos. MudiVoLTE los deja pasar diga lo que diga `dial`, pero
-> los marca como una llamada común, no como una llamada de emergencia IMS (ver
+> propia SIM para ellos. MudiVoLTE los deja pasar diga lo que diga `dial` (en
+> Chile con `country` 56, que la configuración inicial completa desde una SIM
+> chilena), pero los marca como una llamada común, no como una llamada de
+> emergencia IMS (ver
 > [package/README.es.md](package/README.es.md#números)). Ejecutar el cliente IMS del operador en un router puede
 > ir en contra de las condiciones de tu contrato móvil; revísalas. MudiVoLTE es
 > un proyecto personal, probado con un solo operador, y se entrega sin ninguna

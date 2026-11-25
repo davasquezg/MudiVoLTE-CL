@@ -147,6 +147,10 @@ build_config() {
 	set +f
 	json_add_string default_country "$country"
 	# Not a whole number (a typo): the country's default, as when unset.
+	# Without a country it means nothing (the daemon would refuse it and the
+	# bridge would not start): left out. A whole number out of range (3, -5)
+	# still stops the bridge, with the reason in logread.
+	[ -n "$country" ] || national_len=''
 	case "$national_len" in
 	'' | - | *[!0-9-]* | ?*-*) ;;
 	*) json_add_int national_len "$national_len" ;;
