@@ -20,7 +20,7 @@ titular de los derechos de autor.
 | sec-agree e IPsec ESP en modo transporte | ESP y TCP/IP en espacio de usuario: ambos son del kernel |
 | REGISTER, re-REGISTER, de-REGISTER, reg-event | Entitlement del operador (TS.43) |
 | Llamadas entrantes y salientes, PRACK, UPDATE | Adaptadores de PDN QMI/MBIM (el daemon levanta la PDN por sí mismo) |
-| RTP y AMR-WB (RFC 4867), DTMF | AMR-NB, EVS, USSD |
+| RTP, AMR-WB y AMR (RFC 4867), DTMF | EVS, USSD |
 | SMS sobre IP (TS 24.341) | Perfiles de otros operadores listos para usar |
 
 ## Arquitectura
@@ -31,7 +31,7 @@ volte/
   ipsec/   el conjunto de 4 SA y políticas según TS 33.203 §7.1, instalado en el kernel (XFRM)
   reg/     registro: inicial -> 401 -> AKA -> SA -> REGISTER protegido -> 200, temporizadores, reg-event
   call/    INVITE UAS/UAC, 100rel/PRACK, UPDATE, BYE/CANCEL, oferta/respuesta SDP
-  media/   RTP/RTCP, payload AMR-WB RFC 4867 (octet-aligned y bandwidth-efficient), telephone-event
+  media/   RTP/RTCP, payload AMR-WB y AMR RFC 4867 (octet-aligned y bandwidth-efficient), telephone-event
   sms/     MESSAGE application/vnd.3gpp.sms: RP/TP (TS 24.011, 23.040)
   sim/     la interfaz de la SIM (AUTHENTICATE); la implementación con AT+CSIM está en imsd
   srtp/    SRTP para el medio de los teléfonos (RFC 3711, AES-CM + HMAC-SHA1) y claves SDES (RFC 4568)
@@ -56,6 +56,11 @@ Decisiones clave:
   (`link_static.go`: `-lopencore-amrwb -lvo-amrwbenc -lm`, el directorio con
   los archivos `.a` va en `CGO_LDFLAGS`). La compilación estática con musl para el Mudi es
   `scripts/build-static.sh` del repositorio de MudiVoLTE.
+- **Códec AMR (banda angosta):** libopencore-amrnb de opencore-amr (Apache-2.0)
+  mediante cgo (`media/amrnb`, que se habilita al importarlo), enlazado de la
+  misma forma: `libopencore-amrnb.so.0` por defecto, `-lopencore-amrnb -lm`
+  con el mismo tag `amrwb_static`. Sin él, `NewCodec` no tiene AMR y el daemon
+  lo deja fuera de su lista de códecs.
 
 ## Comportamiento de la red real incorporado desde el inicio
 
@@ -72,6 +77,9 @@ publicado.
   `500 … "AKA IP+Port conflict"` (§93, §94). Tras un desafío 401, las SA nuevas
   se instalan junto a las antiguas; el puerto de servidor del UE (el Contact de las
   llamadas) no cambia mientras dura el registro.
-- P-Access-Network-Info es obligatorio; se construye a partir de `AT+QENG="servingcell"`.
+- P-Access-Network-Info lo exige TS 24.229; imsd normalmente lo construye a partir
+  de `AT+QENG="servingcell"`. `volte/reg` y `volte/call` lo agregan solo cuando
+  tiene valor: si no se ha leído ninguna celda, imsd lo omite con un aviso (ver
+  docs/PROTOCOLS.es.md §2.6).
 
 De dónde viene el código: `PROVENANCE.es.md`.

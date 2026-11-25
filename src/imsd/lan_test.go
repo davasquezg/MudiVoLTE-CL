@@ -303,12 +303,12 @@ func TestNormalizeAndPolicy(t *testing.T) {
 		"077;phone-context=x": "+4477",
 	}
 	for in, want := range cases {
-		got, err := normalizeDialed(in, "44")
+		got, err := normalizeDialed(in, SIPConfig{DefaultCountry: "44"}.plan())
 		if err != nil || got != want {
 			t.Fatalf("%q → %q (%v), want %q", in, got, err, want)
 		}
 	}
-	if _, err := normalizeDialed("*100#", "44"); err == nil {
+	if _, err := normalizeDialed("*100#", SIPConfig{DefaultCountry: "44"}.plan()); err == nil {
 		t.Fatal("a USSD code accepted as a number")
 	}
 	allow := []string{"+44", "+33", "1500"}
@@ -396,10 +396,12 @@ type fakeDialer struct {
 	call     *fakeIMSCall
 	failCode int
 	to       atomic.Value
+	uri      atomic.Value // Request-URI asked for ("" = to)
 }
 
-func (d *fakeDialer) Dial(ctx context.Context, to string) (imsCall, error) {
+func (d *fakeDialer) Dial(ctx context.Context, to, requestURI string) (imsCall, error) {
 	d.to.Store(to)
+	d.uri.Store(requestURI)
 	d.mgr.onIMSEvent(d.call, CallStateDialing)
 	time.Sleep(100 * time.Millisecond)
 	d.mgr.onIMSEvent(d.call, CallStateRinging)
@@ -423,6 +425,13 @@ type testRig struct {
 
 func newTestRig(t *testing.T, cfg *Config, withDialer bool) *testRig {
 	t.Helper()
+	return newTestRigWith(t, cfg, nil)
+}
+
+// newTestRigWith is newTestRig with the bridge's config changed by edit
+// before the server starts (nil = as is).
+func newTestRigWith(t *testing.T, cfg *Config, edit func(*SIPConfig)) *testRig {
+	t.Helper()
 	logger := newTestLogger(t)
 	sc := SIPConfig{
 		Listen: "127.0.0.1:0", Transports: []string{"udp"},
@@ -430,6 +439,9 @@ func newTestRig(t *testing.T, cfg *Config, withDialer bool) *testRig {
 		DialAllow: []string{"+44"}, DefaultCountry: "44", EchoExt: "600",
 		RTPPortMin: 41000, RTPPortMax: 41200, RingSec: 5,
 	}.withDefaults()
+	if edit != nil {
+		edit(&sc)
+	}
 	mgr := newCallManager(cfg, sc, nil, logger)
 	lan, err := startLANSIP(sc, mgr, logger)
 	if err != nil {

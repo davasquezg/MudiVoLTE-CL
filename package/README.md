@@ -9,7 +9,7 @@ repository; this page is the complete reference.
 ## All commands
 
 ```
-mudi-volte setup [-y] [--lte-only|--keep-3g] [--phone NAME] [--detach]
+mudi-volte setup [-y] [--lte-only|--keep-3g] [--no-sa] [--phone NAME] [--detach]
 mudi-volte status
 mudi-volte missed [clear]
 mudi-volte sms [--json]
@@ -24,8 +24,9 @@ mudi-volte version
 
 | Command | What it does |
 |---|---|
-| `setup` | Checks the router, the modem and the SIM, creates a phone account, switches the modem to External VoLTE mode with voice over IMS only, turns off the router's sleep mode and restarts the router once. When the modem refuses a value, setup sets back what it wrote and fails: no restart, and the service and the sleep settings stay as they were. `-y` answers the question itself |
+| `setup` | Checks the router, the modem and the SIM, creates a phone account, switches the modem to External VoLTE mode with voice over IMS only, turns off the router's sleep mode and restarts the router once. When the modem refuses a value, setup sets back what it wrote and fails: no restart, and the service and the sleep settings stay as they were. `-y` answers the question itself. Setup also prints the country calling code for numbers dialled with a leading 0: `mudi-volte.main.country` when it is set, otherwise the code of the SIM's MCC, which it writes there (the codes of Latin America and the Caribbean are still to verify against ITU-T E.212/E.164; set the right one with `uci` if it is wrong or missing) |
 | `setup --lte-only` | Also keeps the modem on 4G/5G. Rarely needed: it costs the internet where only 3G reaches. `--keep-3g` is the default |
+| `setup --no-sa` | Also turns 5G standalone off in the modem (`AT+QNWPREFCFG="nr5g_disable_mode",1`), for a network with 5G SA, where the line does not come up; 4G and 5G NSA stay. `--lte-only` does not do this. The value from before goes to `modem.orig` (only with `--no-sa`), and `modem builtin` and `uninstall` write it back. Not yet tested on a network with SA |
 | `status` | Is the SIM registered, which phones are connected, how many calls were missed |
 | `missed` | Incoming calls that no phone answered, newest first: time, number, reason |
 | `missed clear` | Empty the list of missed calls |
@@ -54,9 +55,84 @@ codecs, ring time, the echo test number, SMS on the phones (`sms`), the SIP
 port, the QR setup port, encryption (`encryption`, `tls_port`, and `plain`:
 whether UDP and TCP stay open next to TLS), the account for
 pushes to sleeping phones (`push_login`, `push_password`; `push_url` and `push_domain`
-only for another FlexiAPI server than subscribe.linphone.org) and the log level.
+only for another FlexiAPI server than subscribe.linphone.org), the log level and
+the SIM of the line (`sim_slot`: 1, or 2 for slot 2 and the built-in eSIM; setup
+picks the first slot with a ready SIM and writes it; every AT command, the IMS
+data call and the SMS spool use its subscription).
 The web pages edit the same file. After `uci commit mudi-volte` run
 `mudi-volte restart`.
+
+For a network that needs them, the file also has operator settings, commented
+out: unset or empty means automatic, from the network, the modem and the SIM.
+
+| UCI option | Daemon field | What it sets | Unset |
+|---|---|---|---|
+| `list pcscf` | `pcscf` | P-CSCF addresses (IPv4) in the order to try | the ones the network announces (CGCONTRDP) |
+| `pcscf_port` | `pcscf_port` | port of the first, unprotected REGISTER | 5060 |
+| `domain` | `domain` | IMS home domain | from the ISIM, else made from the IMSI |
+| `imei` | `imei` | IMEI given to the network (15 digits) | the modem's (CGSN) |
+| `smsc` | `smsc` | SMS service centre (+ and up to 15 digits) | from the SIM, else from the first incoming SMS |
+| `network_codecs` | `codecs` | codecs offered to the network, best first: `AMR-WB`, `PCMA`, `PCMU` | all of them (`codecs` is the phones' list) |
+| `ims_apn` | `ims_apn` | APN of the modem profile used for IMS | `ims` |
+| `ims_profile` | `ims_profile` | that profile's number (cid), without looking for the APN | the profile with `ims_apn`, else 2 |
+| `list ipsec_offer` | `ipsec_offers` | IPsec algorithm pairs offered to the P-CSCF, best first, as `integrity/encryption` | all six, see below |
+| `loose_inbound_src_port` | `loose_inbound_src_port` | 0 pins the P-CSCF source port in the inbound IPsec policies | not pinned |
+
+The IPsec pairs are `hmac-md5-96` or `hmac-sha-1-96` with `null`, `aes-cbc` or
+`des-ede3-cbc`. Unset, the daemon offers all six, `hmac-md5-96/null` first (the
+only one offered before, and the one the tested network chose), then
+`hmac-sha-1-96/null`, then the pairs with encryption. Those have not been tried
+on a live network, and the router's kernel may lack their ciphers (to verify on
+the router): when installing the IPsec SAs fails after the network chose a
+cipher, the daemon logs a warning and registers again offering only the pairs
+without encryption. To never offer encryption, list only those two pairs.
+The daemon checks these values when it starts: with one it cannot use it does not
+start, and names the option in the log and in `mudi-volte status`, by its daemon
+field followed by the UCI option where the two differ, e.g.
+`codecs (UCI network_codecs)` (a `pcscf_port` or `ims_profile` that is not a
+number only in the log). The log also says
+which modem profile it took for IMS and why.
+
+### Numbers
+
+A number dialled on a phone goes to the network in international form (E.164)
+when the daemon can tell it: `+…` and `00…` as they are; with `country` set, a
+number with a leading 0 gets the country code instead of the 0 (`07700900456`
+→ `+447700900456` for 44), and a number of exactly `national_len` digits gets
+`+` and the country code (`912345678` → `+56912345678`). `national_len`
+defaults from the country: 9 for Chile (56), where every number has 9 digits
+and there is no trunk 0 (after the Wikipedia article on Chilean numbers, not
+checked against a Subtel document); no such rule for other countries. `-1`
+switches it off; without a country it is ignored, and another value the daemon
+refuses (1 to 3, below -1, or more than 15 digits with the country code) stops
+the phone bridge, with the reason in `logread`. Setup fills `country` from the
+SIM (MCC 730 is 56); an install set up before that needs
+`uci set mudi-volte.main.country=56` once. Shorter numbers (`149`, the echo test) stay as dialled. A
+9-digit special number (600, 800) gets `+56` as well: whether the network
+takes those in that form is to verify on the router.
+
+- `dial` matches that international form: `'+56'` allows `912345678` and bars
+  `+447700900456`; a short number must be listed as it is (`'+56 149'`). An SMS
+  to a number goes out the same way, as an international number (`To_TOA`).
+- `allow` (incoming calls) reads the list and the caller ID with the same
+  rules, so `+56912345678` on the list matches a caller ID `912345678` and the
+  other way round. Without a country, a caller ID of 9 digits or more also
+  matches the end of a longer entry. A hidden caller never matches.
+- Emergency numbers (`list emergency`; unset = the country's list, for Chile
+  131 SAMU, 132 Bomberos, 133 Carabineros, 134 PDI, 136 Socorro Andino, 137
+  maritime rescue, 138 air rescue, 112 and 911, after Wikipedia, with no
+  official Chilean source found) are always allowed whatever `dial` says, never
+  get the country code, and are logged as `EMERGENCY`; a phone's login or the
+  echo test on one of them is refused. No other country has a
+  default list: add yours with `list emergency`. They go out as an ordinary
+  call to `tel:<number>`, which the network may or may not recognise as an
+  emergency; it is **not** an IMS emergency call (no emergency registration).
+  Help lines (139, 147, 149) are not on the list and follow `dial`.
+- `emergency_urn '1'` addresses them to `urn:service:sos` (RFC 5031; with
+  `'133=police'` in the list, `urn:service:sos.police`) with the dialled number
+  in `To`. Off by default and untested: to verify with the operator. A network
+  that wants an emergency registration may refuse the call (for instance with
+  `380 Alternative Service`), which the phone gets as the call's failure.
 
 ## Languages
 
@@ -67,7 +143,7 @@ now `mudi-volte-i18n-es`, Spanish; architecture `all`, it also provides
 | Where | Language it follows |
 |---|---|
 | Command line tool and setup | `mudi-volte.main.lang` |
-| Page in the GL admin panel and its error messages | `mudi-volte.main.lang`; unset: the panel's language, else the browser's |
+| Page in the GL admin panel and its error messages | `mudi-volte.main.lang`; unset: the panel's language, else the browser's (a region such as `es-CL` takes the catalog `es_cl`, else `es`) |
 | Page in LuCI | LuCI's language (System > System > Language) |
 | App on the router's screen (MudiScreen) | The screen's language (Settings > Language) |
 
@@ -100,6 +176,15 @@ it to `sent`, `500` when it lands in `failed`, and `202` when smsd has not
 decided within 20 seconds (a later failure then comes to the phone as a
 message). Typing notifications and delivery receipts are accepted and dropped;
 files get `415`.
+
+A text whose characters are all in the GSM 7-bit alphabet goes as
+`Alphabet: UTF-8`, 160 characters per SMS (153 per part of a longer one;
+`€ [ ] { } ^ ~ \ |` count twice). That alphabet has ñ, é, ü, ¿ and ¡, but not á, í, ó or ú: one
+of those sends the whole text as UCS, 70 characters per SMS (67 per part).
+"¿Vienes mañana?" fits in one SMS of 160; "¿Dónde estás?" goes as UCS. That
+GL's smsd really sends ñ and € in the GSM alphabet is still to verify on the
+router, "100€" first: € is the one character that went as UCS before
+(see [docs/PROTOCOLS.md](../docs/PROTOCOLS.md#sms-to-the-phones-100-119)).
 
 ## QR codes and setup links
 
@@ -196,7 +281,8 @@ awake: the touch panel reports only to the stock app.
 The init script turns the UCI settings into `/var/run/mudi-volte/imsd.json`
 and starts `mudi-imsd -mode service -config` with it (`/etc/init.d/mudi-volte
 json` prints the same; it holds the phones' passwords). The daemon reads a
-few fields the package never writes. They serve development on a router
+few fields the package never writes (the operator settings above it writes
+only when they are set). They serve development on a router
 without phones, with a config of one's own and `-mode daemon` or `-mode
 register-once` (the header of `src/imsd/main.go` lists the modes):
 
@@ -242,7 +328,7 @@ correction does not move.
 
 | Path | What it is |
 |---|---|
-| `VERSION` | Package version |
+| `VERSION` | Package version (the fork's scheme, e.g. `0.2.0.1`: see the [changelog](../CHANGELOG.md)) |
 | `build.sh` | Builds `dist/`: the `.ipk`, one translation `.ipk` per catalog in `po/`, `install.sh` and `SHA256SUMS`, from `build/static/mudi-imsd` (made by `scripts/build-static.sh`). `MUDI_VOLTE_BASE_URL` sets where `install.sh` downloads the packages from |
 | `install.sh.in` | The installer; `build.sh` fills in the version, the download address and the checksums |
 | `control/` | opkg control files: package metadata and maintainer scripts |
@@ -250,5 +336,5 @@ correction does not move.
 | `po/` | Translations: `templates/mudi-volte.pot` (made from the sources), `<lang>/mudi-volte.po`, and `<lang>/mudi-screen-volte.tsv` for the screen app (MudiScreen's catalog format) |
 | `files/` | Everything installed on the router except the binary and the license files; `build.sh` gzips `www/views/` as the GL admin panel expects |
 | `tests/` | `run.sh`: the GL admin panel page with Vue 2 in node, and the LuCI page with LuCI's modules as stubs (needs node and npm) |
-| `toolchain/` | musl toolchain and AMR-WB libraries for the static build, the license collector, and `i18n.py` (extract, update, check and build the translations) |
+| `toolchain/` | musl toolchain and AMR-WB and AMR libraries for the static build, the license collector, and `i18n.py` (extract, update, check and build the translations) |
 | `THIRD_PARTY.md`, `licenses/` | Third-party components inside `mudi-imsd` and their license texts |

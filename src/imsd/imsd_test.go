@@ -6,13 +6,16 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/xarvel/MudiVoLTE/volte/media"
+	"github.com/xarvel/MudiVoLTE/volte/reg"
 	"github.com/xarvel/MudiVoLTE/volte/sms"
 )
 
@@ -246,11 +249,54 @@ func TestParseCGCONTRDP(t *testing.T) {
 
 func TestParseIMSProfile(t *testing.T) {
 	out := "\r\n+CGDCONT: 1,\"IPV4V6\",\"internet\",\"0.0.0.0\",0,0\r\n+CGDCONT: 2,\"IPV4V6\",\"ims\",\"0.0.0.0\",0,0\r\n+CGDCONT: 3,\"IPV4V6\",\"sos\",\"\",0,0\r\n\r\nOK\r\n"
-	if cid := parseIMSProfile(out); cid != 2 {
+	if cid := parseIMSProfile(out, "ims"); cid != 2 {
 		t.Fatalf("cid = %d", cid)
 	}
-	if cid := parseIMSProfile("+CGDCONT: 1,\"IP\",\"internet\"\r\nOK"); cid != 0 {
+	if cid := parseIMSProfile("+CGDCONT: 1,\"IP\",\"internet\"\r\nOK", "ims"); cid != 0 {
 		t.Fatalf("without ims: %d", cid)
+	}
+	// ims_apn names another APN: its profile, in any case, not the "ims" one.
+	other := "+CGDCONT: 1,\"IP\",\"internet\"\r\n+CGDCONT: 2,\"IPV4V6\",\"ims\"\r\n+CGDCONT: 4,\"IPV4V6\",\"IMS.operator\"\r\nOK"
+	if cid := parseIMSProfile(other, "ims.operator"); cid != 4 {
+		t.Fatalf("ims_apn ims.operator: cid = %d", cid)
+	}
+	if cid := parseIMSProfile(out, "ims.operator"); cid != 0 {
+		t.Fatalf("ims_apn missing: cid = %d", cid)
+	}
+}
+
+// imsProfile takes ims_profile, else the profile of ims_apn, else 2, and
+// says in the log which and why.
+func TestIMSProfileChoiceIsLogged(t *testing.T) {
+	reply := "+QUIMSUB: 1\r\n+CGDCONT: 1,\"IP\",\"internet\"\r\n+CGDCONT: 3,\"IPV4V6\",\"ims.operator\"\r\nOK"
+	for _, tc := range []struct {
+		name string
+		cfg  Config
+		err  error // of every AT line
+		cid  int
+		log  []string
+	}{
+		{"configured", Config{IMSProfile: 5, IMSAPN: "ims.operator"}, nil, 5, []string{"cid=5", "from=ims_profile"}},
+		{"found", Config{IMSAPN: "ims.operator"}, nil, 3, []string{"cid=3", "apn=ims.operator", "from=CGDCONT"}},
+		{"missing", Config{}, nil, 2, []string{"level=WARN", "apn=ims", "cid=2", "ims_apn"}},
+		{"failed", Config{}, errors.New("modem busy"), 2, []string{"level=WARN", "CGDCONT failed", "cid=2", "modem busy"}},
+	} {
+		var buf strings.Builder
+		logger := slog.New(slog.NewTextHandler(&buf, nil))
+		link := &ATLink{Run: func(_ context.Context, cmd string) (string, error) {
+			if !strings.Contains(cmd, "CGDCONT?") && !strings.Contains(cmd, "QUIMSUB") {
+				t.Errorf("%s: command %q", tc.name, cmd)
+			}
+			return reply, tc.err
+		}, Retries: 1}
+		if cid := imsProfile(context.Background(), &tc.cfg, link, logger); cid != tc.cid {
+			t.Errorf("%s: cid %d, want %d", tc.name, cid, tc.cid)
+		}
+		for _, want := range tc.log {
+			if !strings.Contains(buf.String(), want) {
+				t.Errorf("%s: log %q lacks %q", tc.name, buf.String(), want)
+			}
+		}
 	}
 }
 
@@ -338,6 +384,83 @@ func TestLoadConfigDefaultsAndOverride(t *testing.T) {
 	}
 }
 
+// The operator settings the package writes from UCI (#11): good values load
+// and reach the stack, bad ones fail the check the modes run first, with the
+// field named.
+func TestLoadConfigOperatorSettings(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "c.json")
+	write := func(body string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(`{"pcscf":["192.0.2.28"],"pcscf_port":5070,"imei":"490154203237518","domain":"ims.mnc001.mcc001.3gppnetwork.org",` +
+		`"smsc":"+447700900000","codecs":["pcma","PCMU"],"ims_profile":3,"ims_apn":"ims.operator",` +
+		`"ipsec_offers":["hmac-sha-1-96/null","HMAC-MD5-96"]}`)
+	cfg, err := loadConfig(path)
+	if err == nil {
+		err = cfg.check()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PCSCFPort != 5070 || cfg.IMEI != "490154203237518" || cfg.SMSC != "+447700900000" || cfg.IMSProfile != 3 ||
+		cfg.imsAPN() != "ims.operator" || len(cfg.Codecs) != 2 {
+		t.Errorf("loaded: %+v", cfg)
+	}
+	rc, err := regConfig(cfg, identities{}, cfg.IMEI, netip.MustParseAddr("10.0.0.2"), cfg.pcscfIPs(), "", slog.Default())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rc.PCSCF != netip.MustParseAddrPort("192.0.2.28:5070") {
+		t.Errorf("P-CSCF %v", rc.PCSCF)
+	}
+	if want := []reg.Offer{{Alg: "hmac-sha-1-96", Ealg: "null"}, {Alg: "hmac-md5-96", Ealg: "null"}}; !slices.Equal(rc.Offers, want) {
+		t.Errorf("offers %v, want %v", rc.Offers, want)
+	}
+	// Unset: the library's broad default offer and the "ims" APN.
+	if def := defaultConfig(); def.imsAPN() != "ims" {
+		t.Errorf("default ims_apn %q", def.imsAPN())
+	} else if rc, err := regConfig(def, identities{}, "", netip.MustParseAddr("10.0.0.2"), nil, "", slog.Default()); err != nil || rc.Offers != nil {
+		t.Errorf("default offers %v, %v", rc.Offers, err)
+	}
+	// A list Config.check would refuse is an error here too, not the default offer.
+	bad := defaultConfig()
+	bad.IPsecOffers = []string{"hmac-sha-256/null"}
+	if _, err := regConfig(bad, identities{}, "", netip.MustParseAddr("10.0.0.2"), nil, "", slog.Default()); err == nil {
+		t.Error("regConfig accepted an invalid ipsec_offers")
+	}
+
+	for _, tc := range []struct{ body, field string }{
+		{`{"pcscf":["not-an-ip"]}`, "pcscf"},
+		{`{"pcscf":["2001:db8::1"]}`, "IPv4"},
+		{`{"pcscf_port":70000}`, "pcscf_port"},
+		{`{"pcscf_port":-1}`, "pcscf_port"},
+		{`{"imei":"12345"}`, "imei"},
+		{`{"imei":"49015420323751x"}`, "imei"},
+		{`{"domain":"ims operator.example"}`, "domain"},
+		{`{"domain":"-ims.example"}`, "domain"},
+		{`{"smsc":"+44 7700"}`, "smsc"},
+		{`{"smsc":"+1234567890123456"}`, "smsc"},
+		{`{"codecs":["G722"]}`, "codecs (UCI network_codecs)"},
+		{`{"ims_profile":300}`, "ims_profile"},
+		{`{"ims_apn":"ims,2"}`, "ims_apn"},
+		{`{"ims_apn":"` + strings.Repeat("a.", 50) + `ims"}`, "ims_apn"},
+		{`{"ipsec_offers":["hmac-sha-256/null"]}`, "ipsec_offers (UCI ipsec_offer)"},
+		{`{"ipsec_offers":["hmac-md5-96/aes-gcm"]}`, "ipsec_offers"},
+	} {
+		write(tc.body)
+		cfg, err := loadConfig(path)
+		if err == nil {
+			err = cfg.check()
+		}
+		if err == nil || !strings.Contains(err.Error(), tc.field) {
+			t.Errorf("%s: %v, want an error naming %s", tc.body, err, tc.field)
+		}
+	}
+}
+
 // --- Gates and parsing ---
 
 func TestDaemonGate(t *testing.T) {
@@ -364,17 +487,17 @@ func TestNumberAllowed(t *testing.T) {
 		{"", false},              // empty
 	}
 	for _, tc := range cases {
-		if got := numberAllowed(allow, tc.from); got != tc.want {
+		if got := numberAllowed(allow, tc.from, numberPlan{}); got != tc.want {
 			t.Errorf("numberAllowed(%q) = %v, want %v", tc.from, got, tc.want)
 		}
 	}
-	if numberAllowed(nil, "+995555123456") {
+	if numberAllowed(nil, "+995555123456", numberPlan{}) {
 		t.Error("an empty allow must reject everyone")
 	}
-	if numberAllowed([]string{"456"}, "+995559999456") {
+	if numberAllowed([]string{"456"}, "+995559999456", numberPlan{}) {
 		t.Error("a short entry must not match as a suffix")
 	}
-	if !numberAllowed([]string{"456"}, "456") {
+	if !numberAllowed([]string{"456"}, "456", numberPlan{}) {
 		t.Error("short entry: an exact match must work")
 	}
 }
@@ -391,6 +514,8 @@ func TestMaskNumber(t *testing.T) {
 		"3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=001013C0D01A2B03":  "3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=00101…",
 		"3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=3102603C0D01A2B03": "3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=310260…",
 		"3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=3C0D01A":           "3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=…",
+		"3GPP-NR-FDD;utran-cell-id-3gpp=001013C0D121A2B3C4D5":   "3GPP-NR-FDD;utran-cell-id-3gpp=00101…",
+		"3GPP-NR-TDD;utran-cell-id-3gpp=001001C94B00C9A82340B":  "3GPP-NR-TDD;utran-cell-id-3gpp=001001…",
 		"IEEE-802.11": "IEEE-802.11",
 	} {
 		if got := maskANI(in); got != want {
@@ -415,7 +540,7 @@ func TestParseIMEI(t *testing.T) {
 func TestParseQENGANI(t *testing.T) {
 	// Live format (S2/S3, with the state field):
 	out := "+QENG: \"servingcell\",\"NOCONN\",\"LTE\",\"FDD\",001,01,1A2B03,123,1300,3,5,5,3C0D,-102,-14,-67,12,0,-,25\r\nOK"
-	ani, err := parseQENGANI(out)
+	ani, err := parseQENGANI(out, "001", "01")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +550,7 @@ func TestParseQENGANI(t *testing.T) {
 	}
 	// Shifted format (no state: a transient modem state, caught on 03.11):
 	out2 := "+QENG: \"servingcell\",\"LTE\",\"FDD\",001,01,1A2B03,123,1300,3,5,5,3C0D,-102\r\nOK"
-	ani2, err := parseQENGANI(out2)
+	ani2, err := parseQENGANI(out2, "001", "01")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,25 +559,30 @@ func TestParseQENGANI(t *testing.T) {
 	}
 	// Multi-line EN-DC (a live reply, 03.11 17:36, §85).
 	out3 := "\r\n+QENG: \"servingcell\",\"NOCONN\"\r\n+QENG: \"LTE\",\"FDD\",001,01,1A2B03,123,1300,3,5,5,3C0D,-103,-15,-67,10,8,127,-\r\n+QENG: \"NR5G-NSA\",001,01,123,-104,13,-10,636768,7\r\n\r\nOK\r\n"
-	if ani3, err := parseQENGANI(out3); err != nil || ani3 != want {
+	if ani3, err := parseQENGANI(out3, "001", "01"); err != nil || ani3 != want {
 		t.Errorf("EN-DC: ani = %q, err = %v, want %q", ani3, err, want)
 	}
-	if _, err := parseQENGANI("\r\nERROR\r\n"); err == nil {
+	if _, err := parseQENGANI("\r\nERROR\r\n", "001", "01"); err == nil {
 		t.Error("want an error without +QENG")
 	}
-	if _, err := parseQENGANI("+QENG: \"servingcell\",\"NOCONN\",\"NR5G\",\"TDD\",1,2,3,4,5,6,7\r\nOK"); err == nil {
-		t.Error("want an error for non-LTE")
+	if _, err := parseQENGANI("+QENG: \"servingcell\",\"NOCONN\",\"NR5G\",\"TDD\",1,2,3,4,5,6,7\r\nOK", "001", "01"); err == nil {
+		t.Error("want an error for an unknown RAT")
 	}
 }
 
 // TestIMSLegRoundtrip runs the network leg as in a live call: 16 kHz PCM →
-// network codec → RTP → back. G.711 works in any build; AMR-WB when the
-// codec is linked in (cgo).
+// network codec → RTP → back. G.711 works in any build; AMR-WB and AMR
+// (8 kHz, through the resampler like G.711) when the codec is linked in (cgo).
 func TestIMSLegRoundtrip(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	cases := []NetMedia{{Negotiated: true, Codec: "PCMA", PayloadType: 8, ClockRate: 8000}}
 	if media.NewAMRWBCoder != nil {
 		cases = append(cases, NetMedia{Negotiated: true, Codec: "AMR-WB", PayloadType: 101, ClockRate: 16000, ModeSet: "0,1,2"})
+	}
+	if media.NewAMRNBCoder != nil {
+		cases = append(cases,
+			NetMedia{Negotiated: true, Codec: "AMR", PayloadType: 108, ClockRate: 8000, ModeSet: "7"},
+			NetMedia{Negotiated: true, Codec: "AMR", PayloadType: 100, ClockRate: 8000, ModeSet: "0,2,4,7", OctetAlign: true})
 	}
 	for _, m := range cases {
 		call := newLoopCall(m)
@@ -489,6 +619,27 @@ func TestIMSLegRoundtrip(t *testing.T) {
 		if energy < 20*320*1e6 {
 			t.Errorf("%s: no audio came through (energy %.3g)", m.Codec, energy)
 		}
+	}
+}
+
+// The network codec list follows what is linked in: AMR-WB, then AMR, then
+// G.711, which is always there.
+func TestLinkedCodecs(t *testing.T) {
+	for _, tc := range []struct {
+		wb, nb bool
+		want   string
+	}{
+		{true, true, "AMR-WB,AMR,PCMA,PCMU"},
+		{true, false, "AMR-WB,PCMA,PCMU"},
+		{false, true, "AMR,PCMA,PCMU"},
+		{false, false, "PCMA,PCMU"},
+	} {
+		if got := strings.Join(linkedCodecs(tc.wb, tc.nb), ","); got != tc.want {
+			t.Errorf("AMR-WB %v, AMR %v: %s, want %s", tc.wb, tc.nb, got, tc.want)
+		}
+	}
+	if got, want := availableCodecs(), linkedCodecs(media.NewAMRWBCoder != nil, media.NewAMRNBCoder != nil); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("availableCodecs %v, want %v", got, want)
 	}
 }
 

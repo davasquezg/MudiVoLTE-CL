@@ -45,10 +45,14 @@ local function load_catalog(lang)
     return ok and type(t) == "table" and t or nil
 end
 
-local catalog -- false: none; loaded once per request
+-- The catalog of the language set now (false: none); loaded again when the
+-- setting changes, since the panel may keep this module between requests.
+local catalog, catalog_lang
 local function T(fmt, ...)
-    if catalog == nil then
-        catalog = load_catalog(uci.cursor():get("mudi-volte", "main", "lang")) or false
+    local lang = uci.cursor():get("mudi-volte", "main", "lang") or ""
+    if lang ~= catalog_lang then
+        catalog = load_catalog(lang) or false
+        catalog_lang = lang
     end
     local s = catalog and catalog[fmt] or fmt
     if select("#", ...) > 0 then

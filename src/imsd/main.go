@@ -102,15 +102,10 @@ func runMode(cfg *Config, logger *slog.Logger, hold bool) error {
 // stack on stubs. Not a single AT command and not a single packet to the
 // network.
 func runCheck(cfg *Config, logger *slog.Logger) error {
-	for _, s := range cfg.PCSCF {
-		if net.ParseIP(s) == nil {
-			return fmt.Errorf("check: pcscf %q is not an IP address", s)
-		}
-	}
 	if t := cfg.IPsecTool; t != "" && t != "netlink" && t != "ip" {
 		return fmt.Errorf("check: ipsec_tool %q is neither netlink nor ip", t)
 	}
-	if err := cfg.checkIMSProfile(); err != nil {
+	if err := cfg.check(); err != nil {
 		return fmt.Errorf("check: %w", err)
 	}
 	pcscf := cfg.pcscfIPs()
@@ -130,8 +125,11 @@ func runCheck(cfg *Config, logger *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("check: identities: %w", err)
 	}
-	st, err := newNetStack("", regConfig(cfg, ids, "000000000000000", local, pcscf, "3GPP-E-UTRAN-FDD", logger),
-		nil, callConfig(cfg, "", logger), smsConfig(cfg, ids, "", logger), logger)
+	rc, err := regConfig(cfg, ids, "000000000000000", local, pcscf, "3GPP-E-UTRAN-FDD", logger)
+	if err != nil {
+		return fmt.Errorf("check: %w", err)
+	}
+	st, err := newNetStack("", rc, nil, callConfig(cfg, "", logger), smsConfig(cfg, ids, "", logger), logger)
 	if err != nil {
 		return fmt.Errorf("check: stack: %w", err)
 	}
@@ -187,7 +185,7 @@ func deriveIdentities(imsi, mcc, mnc, domain string) (identities, error) {
 	return identities{IMPI: imsi + "@" + domain, IMPU: "sip:" + imsi + "@" + domain, Domain: domain}, nil
 }
 
-func regConfig(cfg *Config, ids identities, imei string, ue netip.Addr, pcscf []net.IP, ani string, logger *slog.Logger) reg.Config {
+func regConfig(cfg *Config, ids identities, imei string, ue netip.Addr, pcscf []net.IP, ani string, logger *slog.Logger) (reg.Config, error) {
 	port := uint16(cfg.PCSCFPort)
 	if port == 0 {
 		port = 5060
@@ -206,7 +204,14 @@ func regConfig(cfg *Config, ids identities, imei string, ue netip.Addr, pcscf []
 	if cfg.IPsecTool == "ip" {
 		rc.IPsec = ipsec.ExecRunner{} // netlink otherwise (the library's default)
 	}
-	return rc
+	// Config.check, which every mode that registers runs first, rejects an
+	// invalid list already; one that gets here all the same is an error
+	// rather than the default offer in its place.
+	var err error
+	if rc.Offers, err = cfg.ipsecOffers(); err != nil {
+		return reg.Config{}, err
+	}
+	return rc, nil
 }
 
 func callConfig(cfg *Config, ani string, logger *slog.Logger) call.Config {
@@ -267,16 +272,25 @@ func newATLink() *ATLink {
 	return &ATLink{Run: ubusAT(12 * time.Second), Retries: 4, Timeout: 12 * time.Second}
 }
 
-// imsProfile returns the cid of the IMS APN: from the config, else the
-// profile with APN "ims" in CGDCONT, else 2 (as on the tested Mudi, §71).
-func imsProfile(ctx context.Context, cfg *Config, link *ATLink) int {
+// imsProfile returns the cid of the IMS APN: from the config (ims_profile),
+// else the profile with the APN ims_apn ("ims") in CGDCONT, else 2 (as on
+// the tested Mudi, §71). The log tells which one and why.
+func imsProfile(ctx context.Context, cfg *Config, link *ATLink, logger *slog.Logger) int {
 	if cfg.IMSProfile > 0 {
+		logger.Info("IMS profile", "cid", cfg.IMSProfile, "from", "ims_profile")
 		return cfg.IMSProfile
 	}
-	if out, err := link.query(ctx, "AT+CGDCONT?"); err == nil {
-		if cid := parseIMSProfile(out); cid > 0 {
+	apn := cfg.imsAPN()
+	out, err := link.query(ctx, "AT+CGDCONT?")
+	if err == nil {
+		if cid := parseIMSProfile(out, apn); cid > 0 {
+			logger.Info("IMS profile", "cid", cid, "apn", apn, "from", "CGDCONT")
 			return cid
 		}
+		logger.Warn("IMS profile: no profile with the APN in CGDCONT, trying cid 2; set ims_apn or ims_profile",
+			"apn", apn, "cid", 2)
+	} else {
+		logger.Warn("IMS profile: CGDCONT failed, trying cid 2", "apn", apn, "cid", 2, "err", err)
 	}
 	return 2
 }
@@ -299,23 +313,55 @@ func discoverPDN(ctx context.Context, cfg *Config, link *ATLink, profile int, lo
 	} else {
 		logger.Warn("CGCONTRDP", "profile", profile, "err", err)
 	}
+	auto := func(v string) bool { return v == "" || v == "auto" }
 	iface, localIP, err := findIMSIface(cfg.Interface, info.Local)
 	if err != nil {
+		// The daemon registers over IPv4 only (docs/PROTOCOLS.md §2.3,
+		// "IPv6"). When no interface with IPv4 is found and CGCONTRDP shows
+		// the PDN with a global IPv6 address and no IPv4 one, the PDN is
+		// named as such, unless the config gives the interface or the
+		// address itself. A PDN whose IPv4 address CGCONTRDP does not show
+		// is still found on the interfaces first; link-local alone is no
+		// IPv6 PDN.
+		if info.Local == nil && info.Local6 != nil && info.Local6.IsGlobalUnicast() &&
+			auto(cfg.Interface) && auto(cfg.LocalIPv4) {
+			return pdnEnv{}, fmt.Errorf("the IMS PDN (APN %q) has only the IPv6 address %s in CGCONTRDP (%v): %w",
+				info.APN, info.Local6, err, errIPv6Only)
+		}
 		return pdnEnv{}, fmt.Errorf("IMS PDN interface: %w", err)
 	}
-	if cfg.LocalIPv4 != "" && cfg.LocalIPv4 != "auto" {
+	if !auto(cfg.LocalIPv4) {
 		if localIP = net.ParseIP(cfg.LocalIPv4).To4(); localIP == nil {
 			return pdnEnv{}, fmt.Errorf("local_ipv4 %q is not an address", cfg.LocalIPv4)
 		}
 	}
-	pcscf := cfg.pcscfIPs()
+	pcscf, from := cfg.pcscfIPs(), "the config"
 	if len(pcscf) == 0 {
-		for _, ip := range info.PCSCF {
+		from = "CGCONTRDP"
+		for _, ip := range append(append([]net.IP(nil), info.PCSCF...), info.PCSCF6...) {
 			if !ip.Equal(localIP) {
 				pcscf = append(pcscf, ip)
 			}
 		}
 	}
+	// Our address is IPv4, and the SAs take the family of both ends
+	// (volte/ipsec Set.Validate): an IPv6 P-CSCF is left out, with a line in
+	// the log, and a list of IPv6 ones only is named as such.
+	var pcscf4, pcscf6 []net.IP
+	for _, ip := range pcscf {
+		if ip.To4() != nil {
+			pcscf4 = append(pcscf4, ip)
+		} else {
+			pcscf6 = append(pcscf6, ip)
+		}
+	}
+	if len(pcscf6) > 0 {
+		logger.Info("IMS-PDN: IPv6 P-CSCFs left out, the IMS address is IPv4", "from", from, "pcscf", fmtIPs(pcscf6))
+	}
+	if len(pcscf4) == 0 && len(pcscf6) > 0 {
+		return pdnEnv{}, fmt.Errorf("the P-CSCFs from %s are IPv6 only (%s): %w", from, fmtIPs(pcscf6), errIPv6Only)
+	}
+	pcscf = pcscf4
 	if len(pcscf) == 0 {
 		return pdnEnv{}, errors.New("no P-CSCF found: neither CGCONTRDP nor the config has any")
 	}
@@ -326,9 +372,12 @@ func discoverPDN(ctx context.Context, cfg *Config, link *ATLink, profile int, lo
 // buildLiveStack sets up the live stack on top of an IMS PDN that is already
 // up (the daemon and register-once modes). It sends nothing to the network.
 func buildLiveStack(cfg *Config, logger *slog.Logger) (*netStack, error) {
+	if err := cfg.check(); err != nil {
+		return nil, err
+	}
 	link := newATLink()
 	ctx := context.Background()
-	env, err := discoverPDN(ctx, cfg, link, imsProfile(ctx, cfg, link), logger)
+	env, err := discoverPDN(ctx, cfg, link, imsProfile(ctx, cfg, link, logger), logger)
 	if err != nil {
 		return nil, err
 	}
@@ -353,16 +402,6 @@ func buildStack(ctx context.Context, cfg *Config, link *ATLink, env pdnEnv, logg
 		}
 		logger.Info("IMEI read (15 digits)")
 	}
-
-	ani, err := servingCellANI(ctx, link)
-	if err != nil {
-		return nil, fmt.Errorf("serving cell: %w", err)
-	}
-	// The cell gives away the router's location to within hundreds of metres,
-	// and people attach the log to bug reports: at info level only the network
-	// (PLMN).
-	logger.Info("P-Access-Network-Info", "ani", maskANI(ani))
-	logger.Debug("P-Access-Network-Info", "ani_full", ani)
 
 	// SIM: IMSI/MCC/MNC, ISIM identities, SMSC, AKA keys. The card's logger is
 	// muted: it writes the identities at debug level.
@@ -389,7 +428,26 @@ func buildStack(ctx context.Context, cfg *Config, link *ATLink, env pdnEnv, logg
 	}
 	logger.Info("IMS domain", "domain", ids.Domain, "smsc_on_sim", card.SMSC() != "", "rtp_iface", iface)
 
-	return newNetStack(iface, regConfig(cfg, ids, imei, ue, pcscf, ani, logger), cardAuth{card},
+	// After the SIM: it gives the home MNC for a 1-digit cell MNC (#12). A
+	// cell that cannot be read does not stop the line (#7): see resolveANI.
+	ani, err := servingCellANI(ctx, link, card.MCC(), card.MNC())
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("serving cell: %w", ctx.Err())
+	}
+	ani = resolveANI(ani, err, logger)
+	if ani != "" {
+		// The cell gives away the router's location to within hundreds of
+		// metres, and people attach the log to bug reports: at info level only
+		// the network (PLMN).
+		logger.Info("P-Access-Network-Info", "ani", maskANI(ani))
+		logger.Debug("P-Access-Network-Info", "ani_full", ani)
+	}
+
+	rc, err := regConfig(cfg, ids, imei, ue, pcscf, ani, logger)
+	if err != nil {
+		return nil, err
+	}
+	return newNetStack(iface, rc, cardAuth{card},
 		callConfig(cfg, ani, logger), smsConfig(cfg, ids, card.SMSC(), logger), logger)
 }
 
@@ -545,7 +603,7 @@ func runSIPTest(cfg *Config, logger *slog.Logger) error {
 // logs are masked.
 func handleIncomingCall(c imsCall, fromNumber string, cfg *Config, logger *slog.Logger) {
 	from := maskNumber(fromNumber)
-	if !cfg.IncomingAll && !numberAllowed(cfg.Allow, fromNumber) {
+	if !cfg.IncomingAll && !numberAllowed(cfg.Allow, fromNumber, cfg.plan()) {
 		logger.Info("incoming: declined (caller not allowed)", "from", from)
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -575,21 +633,29 @@ func handleIncomingCall(c imsCall, fromNumber string, cfg *Config, logger *slog.
 }
 
 // numberAllowed does a normalised suffix match: "+995 555 123 456" and
-// "995555123456" match "+995555123456". Short allow entries (<7 digits) need
-// an exact match, otherwise "456" would match too much. An empty allow means
-// reject everyone (the safe default).
-func numberAllowed(allow []string, from string) bool {
-	f := digitsOnly(from)
+// "995555123456" match "+995555123456". Both sides are first read with the
+// number plan (numbers.go), so a caller ID in national form matches an entry
+// in E.164 and back: in Chile "912345678" matches "+56912345678". Without a
+// country (no plan to read the national form with), a caller ID of at least
+// minReverseSuffix digits also matches the end of a longer entry; with one,
+// only the normalised forms are compared. Short allow
+// entries (<7 digits) need an exact match, otherwise "456" would match too
+// much. An empty allow means reject everyone (the safe default), and so does
+// a hidden caller (no digits).
+func numberAllowed(allow []string, from string, p numberPlan) bool {
+	const minReverseSuffix = 9
+	f := e164Digits(from, p)
 	if f == "" || len(allow) == 0 {
 		return false
 	}
+	reverse := p.country == "" && len(f) >= minReverseSuffix
 	for _, a := range allow {
-		ad := digitsOnly(a)
+		ad := e164Digits(a, p)
 		if ad == "" {
 			continue
 		}
 		if len(ad) >= 7 {
-			if strings.HasSuffix(f, ad) {
+			if strings.HasSuffix(f, ad) || (reverse && strings.HasSuffix(ad, f)) {
 				return true
 			}
 		} else if f == ad {
@@ -620,18 +686,22 @@ func maskNumber(s string) string {
 
 // maskANI masks P-Access-Network-Info for logs: the access type and the PLMN
 // are visible, the TAC and the cell ID (the last 11 hex digits of
-// utran-cell-id-3gpp) are hidden.
+// utran-cell-id-3gpp on LTE, the last 15 on NR) are hidden.
 func maskANI(ani string) string {
 	const key = "utran-cell-id-3gpp="
 	i := strings.Index(ani, key)
 	if i < 0 {
 		return ani
 	}
+	hidden := 11 // TAC 4 + ECI 7
+	if strings.HasPrefix(ani, "3GPP-NR-") {
+		hidden = 15 // TAC 6 + NCI 9
+	}
 	id := ani[i+len(key):]
-	if len(id) <= 11 {
+	if len(id) <= hidden {
 		return ani[:i+len(key)] + "…"
 	}
-	return ani[:i+len(key)] + id[:len(id)-11] + "…"
+	return ani[:i+len(key)] + id[:len(id)-hidden] + "…"
 }
 
 func fmtIPs(ips []net.IP) string {

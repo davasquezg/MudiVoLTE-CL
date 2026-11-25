@@ -1,15 +1,17 @@
-# Checks on every push and pull request: the Go library and the daemon (vet,
+# Checks on every push to main, every pull request and on request (Actions >
+# CI > Run workflow, on any branch): the Go library and the daemon (vet,
 # tests, a cross-build for the router), the data-call helper (its tests
 # against a stand-in for the firmware's library), the shell scripts, the GL
-# admin panel page and the syntax of its Lua. The static release build (musl,
-# AMR-WB linked in) needs an arm64 Debian host and stays with
-# scripts/build-static.sh.
+# admin panel page, the syntax of its Lua and the translations. The static
+# release build (musl, AMR-WB and AMR linked in) needs an arm64 Debian host: it runs
+# in release.yml, or by hand with scripts/build-static.sh.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,10 +25,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: src/imsd/go.mod
-      - name: AMR-WB codec and ffmpeg for the media tests
+      - name: AMR-WB and AMR codecs and ffmpeg for the media tests
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libopencore-amrwb-dev libvo-amrwbenc-dev ffmpeg
+          sudo apt-get install -y --no-install-recommends libopencore-amrwb-dev libvo-amrwbenc-dev libopencore-amrnb-dev ffmpeg
       - name: volte library
         working-directory: volte
         run: |
@@ -107,6 +109,7 @@ jobs:
           python3 package/toolchain/i18n.py extract
           git diff --exit-code package/po/templates/
           python3 package/toolchain/i18n.py check
+          python3 package/tests/i18n.test.py
           for d in package/po/*/; do
             l=$(basename "$d"); [ "$l" = templates ] && continue
             python3 package/toolchain/i18n.py build "$l" "$RUNNER_TEMP/i18n-$l"

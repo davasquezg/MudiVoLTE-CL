@@ -7,11 +7,33 @@ config voip 'main'
 	option incoming 'all'
 	# list allow '+447700900123'
 	# Outgoing calls from the phones: '*' allows any number, or a list of
-	# prefixes such as '+44 +33'.
+	# prefixes such as '+44 +33'. The prefixes match the number in
+	# international form (E.164), after 'country' and 'national_len' have
+	# turned a national number into it: '+56' allows 912345678 dialled in
+	# Chile. A short number (149) must be listed as it is. The emergency
+	# numbers below are always allowed.
 	option dial '*'
-	# Country code for numbers dialled with a leading 0 (e.g. 44 for the UK).
-	# Filled in by setup from the SIM.
+	# Country code for numbers dialled with a leading 0 (e.g. 44 for the UK, 56 for Chile),
+	# or, in a country without that 0, dialled with 'national_len' digits.
+	# Filled in by setup from the SIM (MCC 730 is 56, Chile); an install made
+	# before setup knew Chile needs: uci set mudi-volte.main.country=56
 	option country ''
+	# Digits of a national number dialled without a leading 0, which then gets
+	# '+' and the country code: unset = the country's default (9 for Chile,
+	# 56; none for other countries), -1 = off. Ignored without 'country'.
+	# 1 to 3, below -1, or over 15 digits with the country code stops the
+	# phone bridge: the reason is in logread.
+	# option national_len '9'
+	# Emergency numbers: always allowed whatever 'dial' says, never given the
+	# country code. Unset = the country's list (Chile: 131 132 133 134 136
+	# 137 138 112 911). '=police' (fire, ambulance, marine, mountain) names
+	# the service for emergency_urn. They go out as an ordinary call, NOT an
+	# IMS emergency call: keep a phone with its own SIM for emergencies.
+	# list emergency '133=police'
+	# 1 = address emergency calls to urn:service:sos (RFC 5031), the dialled
+	# number staying in To, instead of tel:<number>. Untested: to verify with
+	# the operator before relying on it.
+	# option emergency_urn '0'
 	# Codecs offered to the phones, best first.
 	option codecs 'G722 PCMU PCMA'
 	# How long the phones ring before the caller is declined, in seconds.
@@ -51,7 +73,41 @@ config voip 'main'
 	# Operator quirks: P-CSCF addresses in the order to try. Empty = the ones
 	# the network announces for the IMS connection.
 	# list pcscf '192.0.2.28'
+	# More operator settings, for a network that needs them; unset = automatic.
+	# The daemon refuses a value it cannot use and says why in the log.
+	# The P-CSCF port of the first, unprotected REGISTER (default 5060).
+	# option pcscf_port '5060'
+	# The IMS home domain; unset = from the ISIM, else made from the IMSI
+	# (ims.mncXXX.mccYYY.3gppnetwork.org).
+	# option domain 'ims.mnc001.mcc001.3gppnetwork.org'
+	# The IMEI given to the network (15 digits); unset = the modem's.
+	# option imei '490154203237518'
+	# The SMS service centre (+ and up to 15 digits); unset = from the SIM,
+	# else from the first incoming SMS.
+	# option smsc '+447700900000'
+	# Codecs offered to the network, best first (AMR-WB, PCMA, PCMU); unset =
+	# all three. Not the same as 'codecs' above, which is for the phones.
+	# option network_codecs 'AMR-WB PCMA PCMU'
+	# The IMS connection: the modem profile whose APN is ims_apn (unset =
+	# 'ims'), else profile 2; ims_profile names the profile number itself.
+	# option ims_apn 'ims'
+	# option ims_profile '2'
+	# IPsec algorithms offered to the P-CSCF, best first, as
+	# integrity/encryption: hmac-md5-96 or hmac-sha-1-96, and null, aes-cbc or
+	# des-ede3-cbc. Unset = all six pairs, starting with these two, the ones
+	# without encryption. Should registration fail while installing the
+	# IPsec SAs after the network chose a cipher, offer only these two.
+	# list ipsec_offer 'hmac-md5-96/null'
+	# list ipsec_offer 'hmac-sha-1-96/null'
+	# 0 pins the P-CSCF source port in the inbound IPsec policies; unset = not
+	# pinned, for a P-CSCF that sends from changing ports.
+	# option loose_inbound_src_port '0'
 	option log_level 'info'
+	# The SIM of the phone line: '1' (nano-SIM slot 1) or '2' (slot 2, or the
+	# built-in eSIM, which takes its place). Setup picks the first slot with a
+	# ready SIM and writes it here. To move the line to the other SIM, run
+	# 'mudi-volte modem builtin' first, then set this and run setup again.
+	# option sim_slot '1'
 	# Language of the command line tool and of the page in the GL admin panel,
 	# e.g. 'es' with the package mudi-volte-i18n-es (its install sets it).
 	# Unset: English on the command line, the panel's language on its page.

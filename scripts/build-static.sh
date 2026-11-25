@@ -1,14 +1,14 @@
 #!/bin/sh
 # Fully static mudi-imsd on musl (linux/arm64, Mudi 7 / OpenWrt) with AMR-WB
-# inside: opencore-amrwb and vo-amrwbenc are linked from .a files (tag
-# amrwb_static), the libc is Debian's musl. glibc never gets into the binary
+# and AMR inside: opencore-amrwb, vo-amrwbenc and opencore-amrnb are linked
+# from .a files (tag amrwb_static), the libc is Debian's musl. glibc never gets into the binary
 # (LGPL). The toolchain and the libraries come from
 # package/toolchain/fetch-and-build.sh (cache in package/.cache; a second run
 # rebuilds nothing).
 # The same toolchain and tags run go test for volte/media/... (the build host
 # is arm64 too, so the static tests run natively; Go is the same version as
 # for the daemon). Smoke test: -mode check (no network, no modem), AMR-WB
-# first in network_codecs. At the end package/toolchain/collect-licenses.sh
+# first and AMR second in network_codecs. At the end package/toolchain/collect-licenses.sh
 # rebuilds package/licenses for this binary and fails if a module is missing
 # from THIRD_PARTY.md (the binary itself is built by then).
 # mudi-dsi-helper (C, src/dsi-helper) is built with the same compiler, after
@@ -58,8 +58,8 @@ trap 'rm -f "$cfg"' EXIT
 echo '{"mode": "check"}' >"$cfg"
 log=$("$out" -mode check -config "$cfg" 2>&1)
 echo "$log"
-if ! echo "$log" | grep -q 'network_codecs=AMR-WB,'; then
-	echo "error: AMR-WB is not first in network_codecs" >&2
+if ! echo "$log" | grep -q 'network_codecs=AMR-WB,AMR,'; then
+	echo "error: AMR-WB and AMR are not first in network_codecs" >&2
 	exit 1
 fi
 ls -l "$out"

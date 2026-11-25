@@ -30,6 +30,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf16"
+
+	"github.com/xarvel/MudiVoLTE/volte/sms"
 )
 
 // SMSConfig is the "sms" block of the daemon config; without it SMS stay
@@ -40,7 +42,7 @@ type SMSConfig struct {
 	Sent      string `json:"sent"`
 	Failed    string `json:"failed"`
 	Bus       string `json:"bus"`        // the modem smsd sends through, as for GL's sendsms: "cpu"
-	Slot      int    `json:"slot"`       // the SIM slot: 1
+	Slot      int    `json:"slot"`       // the SIM slot smsd sends from; 0 = the line's (imsSlot)
 	StateFile string `json:"state_file"` // who still waits for which SMS
 }
 
@@ -61,7 +63,7 @@ func (c SMSConfig) withDefaults() SMSConfig {
 		c.Bus = "cpu"
 	}
 	if c.Slot == 0 {
-		c.Slot = 1
+		c.Slot = imsSlot
 	}
 	if c.StateFile == "" {
 		c.StateFile = "/etc/mudi-volte/sms-phones.json"
@@ -483,15 +485,33 @@ func failReason(raw []byte) string {
 	return "no reason given"
 }
 
-// gsmPlain reports whether smsd can send the text in the GSM alphabet: plain
-// ASCII and line breaks, without the backquote the alphabet lacks. Anything
-// else goes as UCS-2, as GL's sendsms does for text outside its charset.
+// gsmSeptets is how many septets r takes when smsd sends the text in the GSM
+// 7-bit default alphabet (TS 23.038 §6.2.1, the table of volte/sms): 1, 2 for
+// the extension table (€ [ ] { } ^ ~ \ |: the escape and the code), 0 when
+// the text has to go as UCS-2. ñ Ñ é É ü Ü ¿ ¡ are in the alphabet; á í ó ú
+// are not. The text reaches smsd as UTF-8 and smsd maps it to septets, by
+// way of the ISO-8859-15 character set smstools uses for text (to verify on
+// the router; spoolText reads stock smstools' GSM text as ISO-8859-15 too).
+// So of the alphabet this leaves out what ISO-8859-15 lacks, the Greek
+// capitals and ¤, and the form feed, as before: those go as UCS-2. € rests on
+// the same guess: it is in ISO-8859-15 (0xA4) but not in ISO-8859-1, where
+// 0xA4 is ¤. If smsd goes by way of ISO-8859-1 instead, € and ¤ swap places
+// and a text with € (UCS-2 before this table was used) could lose it. So
+// "100€" is the first thing to check on the router: that GL's smsd sends ñ
+// and € in the GSM alphabet, and not as UCS-2 or as "?".
+func gsmSeptets(r rune) int {
+	if r == '\f' || r == '¤' || r >= 0x391 && r <= 0x3a9 { // 0x391-0x3a9: the Greek capitals
+		return 0
+	}
+	return sms.SeptetLen(r)
+}
+
+// gsmPlain reports whether smsd can send the text in the GSM alphabet.
+// Anything else goes as UCS-2, as GL's sendsms does for text outside its
+// charset.
 func gsmPlain(s string) bool {
 	for _, r := range s {
-		if r == '\n' || r == '\r' {
-			continue
-		}
-		if r < ' ' || r > '~' || r == '`' {
+		if gsmSeptets(r) == 0 {
 			return false
 		}
 	}
@@ -512,27 +532,38 @@ func smsEncoding(text string) (string, []byte) {
 	return "UCS", out
 }
 
-// smsParts is how many SMS the text takes: 160 GSM characters or 70 UCS-2
-// ones in one, 153 or 67 per part when it is split (TS 23.040 §9.2.3.24.1).
+// smsParts is how many SMS the text takes: 160 septets or 70 UCS-2 units in
+// one, 153 or 67 per part when it is split (TS 23.040 §9.2.3.24.1). A part
+// ends early rather than split an escape from its character or a surrogate
+// pair, so a character never straddles two parts. smsd splits the text
+// itself; this is the count it should come to, for the limit and the log.
 func smsParts(text string) int {
-	if gsmPlain(text) {
-		n := 0
-		for _, r := range text {
-			n++
-			if strings.ContainsRune("[]{}\\~^|", r) {
-				n++ // escape to the extension table
+	single, part, cost := 160, 153, gsmSeptets
+	if !gsmPlain(text) {
+		single, part, cost = 70, 67, func(r rune) int {
+			if r > 0xffff {
+				return 2 // surrogate pair
 			}
-		}
-		if n <= 160 {
 			return 1
 		}
-		return (n + 152) / 153
 	}
-	n := len(utf16.Encode([]rune(text)))
-	if n <= 70 {
+	n := 0
+	for _, r := range text {
+		n += cost(r)
+	}
+	if n <= single {
 		return 1
 	}
-	return (n + 66) / 67
+	parts, used := 1, 0
+	for _, r := range text {
+		c := cost(r)
+		if used+c > part {
+			parts++
+			used = 0
+		}
+		used += c
+	}
+	return parts
 }
 
 func containsString(xs []string, s string) bool {

@@ -23,6 +23,14 @@ func (m *Manager) Dial(target string, local netip.AddrPort) (*Call, error) {
 // DialWith is Dial with attach called before the first OnState, so the
 // application can bind its own state to the call.
 func (m *Manager) DialWith(target string, local netip.AddrPort, attach func(*Call)) (*Call, error) {
+	return m.DialURI("", target, local, attach)
+}
+
+// DialURI is DialWith with a Request-URI other than the To: an emergency call
+// addressed to a service URN (requestURI "urn:service:sos.police", RFC 5031)
+// keeps the dialled number in To (TS 24.229 §5.1.6). An empty requestURI
+// means target.
+func (m *Manager) DialURI(requestURI, target string, local netip.AddrPort, attach func(*Call)) (*Call, error) {
 	conn := m.reg.Conn()
 	b, ok := m.reg.Binding()
 	if conn == nil || !ok {
@@ -30,6 +38,9 @@ func (m *Manager) DialWith(target string, local netip.AddrPort, attach func(*Cal
 	}
 	if !strings.Contains(target, ":") {
 		target = "tel:" + target
+	}
+	if requestURI == "" {
+		requestURI = target
 	}
 	impu := m.reg.IMPU()
 	if b.Preferred != "" {
@@ -41,7 +52,8 @@ func (m *Manager) DialWith(target string, local netip.AddrPort, attach func(*Cal
 	c.localURI = "<" + impu + ">"
 	c.remoteURI = "<" + target + ">"
 	c.remoteID = c.remoteURI
-	c.target = target
+	c.target = requestURI
+	c.target0 = requestURI
 	c.routes = append([]string(nil), b.Routes...) // TS 24.229 §5.1.2A.1.1
 	c.routes0 = c.routes
 	c.local = local
@@ -107,7 +119,7 @@ func (c *Call) retryWithMinSE(conn *sipnet.Conn, res *sip.Response) bool {
 	c.localSeq++
 	c.inviteSeq = c.localSeq
 	c.remoteTag = ""
-	c.target = strings.Trim(c.remoteURI, "<>")
+	c.target = c.target0
 	c.routes = c.routes0
 	c.out = c.newInviteLocked()
 	c.mu.Unlock()

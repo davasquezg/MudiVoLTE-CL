@@ -22,7 +22,7 @@ el lado del operador, `198.51.100.x` para el nuestro.
 4. [Protocolos estándar — implementación](#4-protocolos-estándar--implementación)
    - 4.1 [Registro IMS (sec-agree, IPsec, AKA)](#41-registro-ims-sec-agree-ipsec-aka)
    - 4.2 [Llamadas entrantes y salientes](#42-llamadas-entrantes-y-salientes)
-   - 4.3 [Medios (RTP, AMR-WB, G.722, G.711, DTMF)](#43-medios-rtp-amr-wb-g722-g711-dtmf)
+   - 4.3 [Medios (RTP, AMR-WB, AMR, G.722, G.711, DTMF)](#43-medios-rtp-amr-wb-amr-g722-g711-dtmf)
    - 4.4 [SMS sobre IP](#44-sms-sobre-ip)
    - 4.5 [Puente SIP para teléfonos de la LAN (Wi-Fi del Mudi)](#45-puente-sip-para-teléfonos-de-la-lan-wi-fi-del-mudi)
 5. [Problemas conocidos](#5-problemas-conocidos)
@@ -169,8 +169,9 @@ con `MUDI_VOLTE_UNINSTALL=1`: ya restauró el módem y elimina los datos
 por sí mismo.
 
 `mudi-volte setup` funciona igual en la dirección opuesta. Lee cada valor antes de
-escribirlo (`ims`, `voice_disable`, `ue_usage_setting`, `voice_domain`, y `mode_pref` con
-`--lte-only`) y continúa solo cuando el módem los aceptó todos: sin `voice_domain` 1
+escribirlo (`ims`, `voice_disable`, `ue_usage_setting`, `voice_domain`, `mode_pref` con
+`--lte-only`, y al final `nr5g_disable_mode` 1 con `--no-sa`, que desactiva el 5G SA: `mode_pref`
+LTE:NR5G no lo hace) y continúa solo cuando el módem los aceptó todos: sin `voice_domain` 1
 la red puede mover una llamada a 3G, donde un módem en modo External VoLTE no tiene voz. Cuando el
 módem rechaza un valor o no responde, setup escribe de vuelta los valores que leyó, del más reciente al más antiguo,
 y falla. Desactiva el modo de suspensión del router (3.3), habilita el servicio y reinicia el
@@ -178,6 +179,11 @@ router solo después de que el módem aceptó cada valor, de modo que un setup c
 módem, el servicio y los ajustes de suspensión como estaban. Lo que queda es la cuenta del teléfono y
 el código de país, que setup crea antes de preguntar, y `modem.orig` cuando el módem tampoco
 aceptó de vuelta los valores antiguos: `mudi-volte modem builtin` restaura a partir de él.
+`nr5g_disable_mode` se guarda en `modem.orig` solo con `--no-sa` (un setup fallido vuelve a
+quitar esa línea), y la restauración lo escribe de vuelta solo cuando el archivo lo tiene,
+después de los demás valores. Setup lee el valor de la respuesta
+`+QNWPREFCFG: "nr5g_disable_mode",N`, igual que los demás valores; ese formato aún está por
+verificar en el router, y una respuesta sin dígito detiene el setup como un módem que no responde.
 
 Las páginas web ejecutan setup y la restauración en segundo plano (`--detach`): una solicitud no debe esperar
 ni a un módem que no responde (con sus reintentos, una consulta AT tarda minutos en ese caso)
@@ -380,7 +386,9 @@ service after a crash: N in a row". Código: `src/imsd/crashes.go`.
 `mudi-volte setup` verifica el helper y la API DSI antes de tocar el módem
 (`check_data_call` en `package/files/usr/sbin/mudi-volte`). No existe una opción `data_call`;
 la clave de configuración opcional `dsi_helper` del daemon reemplaza la ruta del ejecutable del helper.
-La antigua clave JSON `dsi_path` se ignora al actualizar. Un `ims_profile` fuera de 0–255 termina el
+La antigua clave JSON `dsi_path` se ignora al actualizar. Un `ims_profile` fuera de 0–255, u otro
+ajuste del operador que el daemon no puede usar (`pcscf`, `pcscf_port`, `imei`, `domain`, `smsc`,
+`codecs`, `ims_apn`, `ipsec_offers`; ver `package/README.es.md`), termina el
 servicio al iniciar, con el error en `mudi-volte status`: es un error en la configuración,
 no una falla de la llamada (procd vuelve a iniciar el servicio cada 10 s, con el mismo resultado; ese
 término no cuenta como crash, no llega a ninguna red).
@@ -401,7 +409,11 @@ AT+CGDCONT?
 # Buscar la línea con APN "ims" → tomar el primer campo (cid, normalmente 2)
 ```
 
-Código: `parseIMSProfile` en `src/imsd/pdn.go`.
+El APN que se busca es `ims_apn` (opción UCI y clave JSON; por defecto `ims`, sin distinguir
+mayúsculas); `ims_profile` indica el cid directamente y se salta la búsqueda. Si no se encuentra
+ninguno, el daemon prueba con el cid 2 (el Mudi probado, §71). El log indica qué perfil se tomó y
+por qué (`IMS profile cid=… from=ims_profile`, `from=CGDCONT`, o una advertencia antes del cid 2).
+Código: `imsProfile` en `src/imsd/main.go`, `parseIMSProfile` en `src/imsd/pdn.go`.
 
 ### 2.3 AT+CGCONTRDP — parámetros del PDN IMS
 
@@ -436,6 +448,64 @@ Interfaz IMS: `rmnet_data*` con la dirección del campo 4 de CGCONTRDP.
 después de una reconexión (por ejemplo, `rmnet_data1` ← internet después de CFUN 4→1).
 Código: `findIMSIface` en `src/imsd/pdn.go` — busca la interfaz con la IP de CGCONTRDP, no
 un nombre fijo.
+
+#### IPv6
+
+MudiVoLTE se registra **solo por IPv4**. Un operador cuyo APN IMS sea solo IPv6, o que anuncie los
+P-CSCF solo en IPv6, no logra el registro: el daemon lo dice de forma explícita (más abajo).
+Nada de esto se ha probado en una red: la configuración IMS de los operadores chilenos (Entel,
+Movistar, Claro, WOM) sigue **por verificar con cada operador**. La tabla del final sale de leer
+el código, no de mediciones.
+
+**Qué hace hoy el daemon con IPv6:**
+
+- La llamada de datos se pide primero como IPv4v6 y después como IPv4 (`startDataCall` en
+  `src/imsd/datacall.go`).
+- En un PDN dual stack, TS 27.007 §10.1.23 entrega una línea de CGCONTRDP con los parámetros IPv4 y
+  luego una con los IPv6 (más pares cuando hay más servidores DNS o P-CSCF). `parseCGCONTRDP` lee
+  ambas familias y las guarda por separado: IPv4 en `Local`/`PCSCF`, IPv6 en `Local6`/`PCSCF6`.
+  `cgcontrdpAddr` acepta las formas IPv4 (`a.b.c.d`, con `/len` o con la máscara en forma punteada)
+  y las formas IPv6 de `+CGPIAF`: notación con puntos (16 octetos decimales, 32 con la máscara) y
+  notación con dos puntos (`2001:db8::5`, con `/len` o una máscara tras un espacio). Todavía no se
+  ha visto qué forma imprime el RG650V para IPv6 (**por verificar en el router**).
+- `discoverPDN` (`src/imsd/main.go`) usa la dirección IPv4 y los P-CSCF IPv4. Los P-CSCF IPv6, sea de
+  CGCONTRDP o del ajuste `pcscf`, se dejan fuera con una línea en el log
+  (`IMS-PDN: IPv6 P-CSCFs left out, the IMS address is IPv4`).
+
+**Diagnóstico.** Los tres casos de abajo terminan la sesión como `pdn-failed`, igual que cualquier
+falla del PDN antes (la recuperación no cambia). El error envuelve `errIPv6Only` (`src/imsd/pdn.go`)
+y aparece en `last_error` del archivo de estado, que `mudi-volte status` muestra como "Last error",
+y una vez por sesión en el log, con nivel ERROR, como `IMS-PDN: IPv6 only, the line cannot register`
+(`waitPDN` en `src/imsd/service.go`, tras sus 10 intentos).
+
+| Caso | `last_error` (después de `pdn-failed: `) |
+|---|---|
+| CGCONTRDP entrega una dirección IPv6 global y ninguna IPv4, y ninguna `rmnet_data*` sin la ruta por defecto tiene IPv4 (la configuración no fija `interface` ni `local_ipv4`) | `the IMS PDN (APN "ims") has only the IPv6 address 2001:db8::5 in CGCONTRDP (no rmnet_data* IMS interface with an IPv4 address …): IMS over IPv6 is not supported: MudiVoLTE registers over IPv4 only` |
+| Hay dirección IPv4, pero los P-CSCF son solo IPv6 (de CGCONTRDP o de `pcscf`) | `the P-CSCFs from CGCONTRDP are IPv6 only (2001:db8:1::20): IMS over IPv6 is not supported: …` |
+| El ajuste `interface` nombra una `rmnet_data*` con una dirección IPv6 global y ninguna IPv4 | `IMS PDN interface: rmnet_data0 has only IPv6 (2001:db8::5), no IPv4 address: IMS over IPv6 is not supported: …` |
+
+Las direcciones IPv6 link-local (`fe80::/10`) por sí solas no cuentan como PDN IPv6, ni en
+CGCONTRDP ni en la interfaz. Primero se revisan las interfaces: si CGCONTRDP muestra solo IPv6 pero
+una `rmnet_data*` sin la ruta por defecto tiene IPv4, se usa esa, como antes. Sin dirección de
+CGCONTRDP, en modo `auto`, una `rmnet_data*` con solo IPv6 se nombra en el error únicamente como
+pista (`no rmnet_data* IMS interface with an IPv4 address (rmnet_data2 has only IPv6 (2001:db8:ff::1), no IPv4 address)`),
+no como PDN IPv6: puede ser otro PDN mientras el IMS todavía no tiene dirección. Aún no se ha visto
+qué `rmnet_data*` usa el RG650V para un PDN IPv6 (**por verificar en el router**).
+
+**Qué haría falta para IPv6 completo** (funciones exactas; nada de esto está implementado):
+
+| Capa | Hoy | Falta para IPv6 |
+|---|---|---|
+| Dirección e interfaz IMS | `findIMSIface` y `firstIPv4` (`src/imsd/pdn.go`) buscan solo IPv4; `service.watch` revisa la dirección con `firstIPv4` | Buscar la dirección IPv6 global. En 3GPP la red entrega al UE un identificador de interfaz y el prefijo /64 por router advertisement, así que lo que CGCONTRDP muestra como dirección puede ser solo una parte (**por verificar en el router**) |
+| Configuración | `local_ipv4` es solo IPv4 (`discoverPDN`) | Un equivalente IPv6 |
+| Rutas de host a los P-CSCF | `addHostRoutes` (`src/imsd/service.go`) escribe `ip route replace A/32` | `/128` para IPv6 |
+| Configuración del registro | `regConfig` y `buildStack` (`src/imsd/main.go`) arman las direcciones con `netip.AddrFromSlice(ip.To4())`, que descarta IPv6 | Aceptar ambas familias |
+| Socket RTP | `netStack.bindRTP` (`src/imsd/netstack.go`) escucha en `udp4` | `udp6` o `udp` |
+| IPsec (XFRM) | `volte/ipsec` es neutral respecto de la familia: `Set.Validate` exige la misma familia en ambos extremos; el runner netlink (`netlink_linux.go`) arma SA y políticas con `netip.Addr.AsSlice()`, `hostNet` da `/128` para IPv6 y las listas usan `FAMILY_ALL` | Nada en el código; las SA IPv6 nunca han corrido en el kernel del Mudi (**por verificar**) |
+| Via, Contact y Route de SIP | `volte/reg` los escribe con `netip.AddrPort.String()`, que da `[2001:db8::1]:5060`, la forma de RFC 3261; `volte/sipnet` marca por `tcp`, neutral respecto de la familia | `granted` (`volte/reg/reg.go`) busca nuestro Contact en el 200 OK como texto: una red que escriba la dirección IPv6 de otra forma (ceros, mayúsculas) no coincidiría (**por verificar con el operador**) |
+| SDP | `SessionDescription.Bytes` (`volte/call/sdp.go`) escribe `IN IP6` para una dirección IPv6; el parser acepta ambas | `bandwidthAS` cuenta la cabecera IPv4 en `b=AS`; la de IPv6 es 20 bytes más larga |
+| Firewall | Las reglas están en la tabla `inet fw4` (§3.2), así que cubren ambas familias | Nada |
+| Puente SIP (LAN) | Solo IPv4 (§4.5); no depende de la familia del lado IMS | Nada para IMS |
 
 ### 2.4 AT+QIMSCFG="authenticate"
 
@@ -494,24 +564,64 @@ El formato de la respuesta varía (§77, §85):
   +QENG: "LTE","FDD",MCC,MNC,cellID,PCID,EARFCN,band,ULbw,DLbw,TAC,...
   +QENG: "NR5G-NSA",...
   ```
+  La línea `NR5G-NSA` no trae ID de celda ni TAC: en EN-DC la celda es el ancla LTE.
+- Una sola línea, 5G SA (orden de campos según el comentario del propio Quectel en
+  QConnectManager `atc.c` y una captura pública de un RG650V; **por verificar en el router**, no
+  tenemos una red SA para probar):
+  `+QENG: "servingcell",<state>,"NR5G-SA",<duplex>,MCC,MNC,cellID,PCID,TAC,ARFCN,band,NR_DL_bw,RSRP,RSRQ,SINR,...`
+  Aquí el TAC va justo después del PCID (`+6` desde el token `"NR5G-SA"`), el ID de celda es el
+  NCI (hasta 9 dígitos hex) y el TAC tiene hasta 6 dígitos hex. El ejemplo de Quectel trae un espacio
+  antes del MCC; el parser recorta cada campo. Sin celda, el módem responde `+QENG: "servingcell","SEARCH"`.
 
 **⚠️ Trampa (§85):** después de la palabra `"LTE"` los campos son, en orden:
 `duplex, MCC, MNC, cellID, PCID, EARFCN, band, ULbw, DLbw, **TAC (+10)**`.
 TAC es el **décimo** campo, no el sexto (ese es EARFCN). El parser debe contar desde el token `"LTE"`.
 Código: `parseQENGANI` en `src/imsd/pdn.go`, con 3 reintentos y la respuesta cruda en el error.
+Si una respuesta trae una entrada `"LTE"` y otra `"NR5G-SA"` (no se ha visto), se usa la de LTE.
 
-Formato de P-Access-Network-Info (TS 24.229 §7.2A.4):
+Formato de P-Access-Network-Info (TS 24.229 V17.8.0 §7.2A.4, ítems 12 y 22): `utran-cell-id-3gpp` es
+el MCC (3 dígitos decimales), el MNC ("2 o 3 dígitos decimales según el valor del MCC"), el TAC y la
+identidad de celda, en hex en mayúsculas. En LTE el TAC tiene 4 dígitos hex (EPC) y el ECI 7; en NR
+el tipo de acceso es `3GPP-NR-FDD` o `3GPP-NR-TDD` (el campo duplex de QENG), el TAC tiene 6 dígitos
+hex y el NCI 9 (el NID opcional de 11 dígitos es solo para redes no públicas autónomas):
 ```
 3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=<PLMN><TAC4hex><ECI7hex>
 # ejemplo (celda ficticia): 3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=001013C0D01A2B03
 # PLMN=00101 (MCC=001, MNC=01: la red de prueba 3GPP), TAC=3C0D, ECI=01A2B03
+3GPP-NR-FDD;utran-cell-id-3gpp=<PLMN><TAC6hex><NCI9hex>
+# ejemplo (celda ficticia): 3GPP-NR-FDD;utran-cell-id-3gpp=001013C0D121A2B3C4D5
+# PLMN=00101, TAC=3C0D12, NCI=1A2B3C4D5
 ```
+Si la red del operador acepta un REGISTER con la forma NR está **por verificar en el router**
+(VoNR en sí sigue sin soporte, ver el README).
 
-Si el módem está en WCDMA (un estado transitorio después de que se levanta el PDN), no construir un PANI para E-UTRAN;
-esperar LTE (§79).
+**Largo del MNC (issue #12).** Todas las capturas que conocemos imprimen el MNC como cadena con su
+cero a la izquierda (`01`, `00`, `260`), y TS 24.229 dice que el MNC "should be obtained from the
+E-UTRAN Cell Global Identifier (ECGI)", que es lo que imprime el módem. Por eso un MNC de 2 o 3 dígitos
+se usa tal como lo imprime el módem, sea cual sea el largo del MNC de la SIM: algunos países mezclan
+MNC de 2 y 3 dígitos bajo un mismo MCC, y el largo de la SIM no dice nada del MNC de otra red. Solo se
+rellena un MNC de 1 dígito (un firmware que lo imprimiera como número convertiría `01` en `1` y
+dejaría el ID de celda con un dígito de menos): el daemon lee la celda después de la SIM y, si el MNC
+rellenado a 3 dígitos es el MNC propio de 3 dígitos de la SIM (EF_AD) bajo el MCC propio, queda con 3
+dígitos; si no, con 2. Nunca acorta un MNC. Un MNC de 1 dígito de otra red con MNC de 3 dígitos
+seguiría saliendo mal; no se conoce ninguna captura con un MNC de 1 dígito.
+
+**Celda ilegible (issue #7).** Si ningún intento entrega una celda (un formato desconocido, o un
+momento sin celda), el registro sigue: con el último P-Access-Network-Info leído desde que partió el
+daemon (solo en memoria) o, si no hay, sin la cabecera. Ambos casos dejan un aviso en el log.
+`volte/reg` y `volte/call` agregan la cabecera solo cuando tiene valor; TS 24.229 pide que el UE la
+envíe, así que una red podría rechazar un REGISTER sin ella (por verificar con el operador).
+
+Si el módem está en WCDMA (un estado transitorio después de que se levanta el PDN), no se construye un PANI
+para E-UTRAN (§79). Antes del issue #7 la configuración fallaba y se reintentaba hasta que volvía LTE;
+ahora esa respuesta cuenta como una celda ilegible, así que el registro sigue con el último PANI o sin
+él, como arriba. El PANI queda fijo al construir la pila IMS: un PANI reutilizado (quizás desactualizado)
+o ausente se mantiene en cada REGISTER y llamada hasta que se reconstruye la sesión IMS (un reinicio de
+la sesión o del daemon). El aviso del log lo indica.
 
 El ID de celda revela la ubicación del router con una precisión de cientos de metros. Desde la 0.9.14 el daemon
-registra en el log solo el PLMN (`…=00101…`) en nivel info; el valor completo se registra en nivel debug.
+registra en el log solo el PLMN (`…=00101…`) en nivel info (en NR se ocultan los últimos 15 dígitos hex, en LTE
+los últimos 11); el valor completo se registra en nivel debug.
 Las celdas de los ejemplos de este documento y de las pruebas son ficticias.
 
 ### 2.7 AT+CGSN — IMEI
@@ -780,7 +890,13 @@ UE                                  P-CSCF (192.0.2.28:5060)
 - **Conexiones**: el primer REGISTER va por TCP plano desde un puerto efímero hacia P-CSCF:5060;
   tras el 401 el daemon escucha en `port-s`, instala las SA y abre una conexión protegida
   desde `port-c` → el `port-s` del P-CSCF. El REGISTER protegido lleva `Security-Verify` (un eco de `Security-Server`).
-- **Security-Client**: ofrecemos `hmac-md5-96` / `null` (TS 33.203 §7). Cada REGISTER sobre
+- **Security-Client**: un mecanismo `ipsec-3gpp` por par de algoritmos, el mejor primero, todos con
+  los mismos SPI y puertos (TS 33.203 §7). Por defecto, todos los pares que instala la capa IPsec:
+  `hmac-md5-96`/`null` (el único par que se ofrecía antes y el que eligió la red probada),
+  `hmac-sha-1-96`/`null`, luego los mismos dos con `aes-cbc` y después con `des-ede3-cbc`. La lista
+  UCI `ipsec_offer` (JSON `ipsec_offers`, cadenas `"alg/ealg"`) reemplaza la lista. Del
+  `Security-Server` el daemon solo toma un mecanismo cuyo par haya ofrecido: el de `q` más alto, o
+  si no el primero (RFC 3329 §2.3; `auth.ChooseOffered`). Cada REGISTER sobre
   las SA vigentes lleva SPI nuevos y un port-c nuevo, con el mismo port-s (ver "Refresco y re-REGISTER" más abajo).
 - **P-Access-Network-Info** (PANI): `3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=<PLMN><TAC><ECI>`.
   Obligatorio: el registro no avanza cuando no se puede construir la información de la red de acceso (§75).
@@ -802,8 +918,17 @@ UE                                  P-CSCF (192.0.2.28:5060)
 
 - `port-c` y `port-s` son nuestros puertos protegidos de cliente y servidor (aleatorios, del rango
   20000–59999), anunciados en Security-Client. En la tabla también se llaman `port-uc` y `port-us`.
-- Algoritmos: `hmac-md5-96` para integridad (clave IK, 16 bytes), cifrado `null`.
-- Claves: IK de la respuesta AKA para la integridad de las SA; CK se ignora (ealg=null).
+- Algoritmos: el par que eligió el P-CSCF (arriba); en la red probada, `hmac-md5-96` para
+  integridad y cifrado `null`.
+- Claves (TS 33.203 Anexo I, `auth.IntegrityKey` y `auth.EncryptionKey`): `hmac-md5-96` usa IK
+  (16 bytes), `hmac-sha-1-96` IK seguida de 32 bits en cero (20 bytes); `aes-cbc` usa CK
+  (16 bytes), `des-ede3-cbc` CK1 ‖ CK2 ‖ CK1 (24 bytes); con `null` no se usa CK. Los pares con
+  cifrado aún no se han visto en una red real: requieren los cifradores `cbc(aes)` y
+  `cbc(des3_ede)` del kernel (por verificar en el router). Si falla la instalación de las SA de
+  un par con cifrado, el cliente deja una advertencia en el log, saca los pares con cifrado de
+  todos los Security-Client siguientes y se registra de nuevo de inmediato
+  (`reg.Client.dropCiphers`); si la oferta no tiene ningún par sin cifrado, el error se informa
+  tal cual.
 - Modo: transporte (no túnel).
 - Cada plantilla de estado y de política tiene `reqid 0x4d554449` (la palabra ASCII
   `MUDI`). Es una etiqueta de propiedad compartida por todas las SA de MudiVoLTE; el SPI sigue
@@ -1042,18 +1167,25 @@ Códigos en `src/imsd/callmgr.go`:
 
 #### Llamada saliente (UAC)
 
-Ruta por el PDN IMS con una oferta AMR-WB + G.711 + DTMF. Encabezados:
+Ruta por el PDN IMS con una oferta AMR-WB + AMR + G.711 + DTMF (AMR solo si está enlazado, ver 4.3). Encabezados:
 - `Route: <sip:P-CSCF:port-s;lr>` + Service-Route del REGISTER.
 - `P-Preferred-Service: urn:urn-7:3gpp-service.ims.icsi.mmtel`
 - `P-Preferred-Identity: <first P-Associated-URI>` (§88: la corrección del 403).
 - `Accept-Contact: *;+g.3gpp.icsi-ref="urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel"`
 - `Supported: 100rel`
+- Request-URI y `To`: `tel:<número>`, el número en E.164 tras el plan de numeración
+  (`src/imsd/numbers.go`: `+`, `00`, un 0 troncal o `national_len` dígitos con `default_country`).
+  Un número de emergencia del plan queda tal como se marcó (`tel:133`) y no pasa por `dial_allow`; con
+  `emergency_urn` la Request-URI es `urn:service:sos[.<servicio>]` (RFC 5031) y `To` conserva
+  `tel:133` (`DialURI` de `volte/call`, también tras un 422). Ninguna de las dos es una llamada de
+  emergencia IMS (no hay registro de emergencia, TS 24.229 §5.1.6); falta verificar si el operador
+  encamina alguna de las dos formas.
 
 PRACK para 18x confiables (§88). ACK para 2xx (§88). CANCEL al colgar antes del 200 (§84).
 
 Ante `488 Not Acceptable Here` desde el gateway: el gateway exige AMR/AMR-WB (§88: una oferta solo con G.711
 es rechazada por el MSX con `sipsl_CompareCodecListForCommon failed`). Esto requiere un binario
-compilado en forma cruzada con AMR-WB (cgo, opencore-amr + vo-amrwbenc).
+compilado en forma cruzada con AMR-WB y AMR (cgo, opencore-amr + vo-amrwbenc).
 
 #### re-INVITE y UPDATE
 
@@ -1128,7 +1260,7 @@ Un mensaje inválido cuesta a lo sumo su conexión, nunca el daemon (`volte/sipn
   error en el log sigue siendo un bug que corregir.
 
 
-### 4.3 Medios (RTP, AMR-WB, G.722, G.711, DTMF)
+### 4.3 Medios (RTP, AMR-WB, AMR, G.722, G.711, DTMF)
 
 #### RTP (RFC 3550)
 
@@ -1148,7 +1280,37 @@ Un mensaje inválido cuesta a lo sumo su conexión, nunca el daemon (`volte/sipn
   Cada paquete tiene CMR=15 (sin preferencia).
 - Códec: un wrapper cgo en torno a `opencore-amrwb` (decodificación) y `vo-amrwbenc` (codificación),
   enlazado estáticamente. Compilación estática: `volte/media/amrwb`, tag `amrwb_static`.
-  Sin AMR-WB, solo G.711 (una oferta solo con G.711 es rechazada por algunos gateways del operador).
+  Sin cgo (sin AMR-WB ni AMR), solo G.711 (una oferta solo con G.711 es rechazada por algunos gateways del operador).
+
+#### AMR, banda angosta (RFC 4867)
+
+- `AMR/8000`, PT dinámico: la red probada lo ofrece en varios PT con distintos `mode-set`
+  (102, 100, 107, 108, 113 en `volte/call/testdata/live_offer.sdp`); respondemos con el primero que
+  lista y devolvemos su `fmtp` sin cambios. En nuestras propias ofertas: PT=102,
+  `mode-change-capability=2;max-red=0` (el `fmtp` de la propia línea AMR de la red), sin `mode-set`.
+- Preferencia: AMR-WB, luego AMR, luego G.711 (`network_codecs` en el log; la clave `codecs` de nivel superior de
+  la configuración JSON del daemon la reemplaza, la configuración UCI no la fija). AMR es lo que una interconexión a
+  2G/3G o a otra red puede ofrecer sin G.711 (issue #8); GSMA IR.92 lo hace obligatorio para un UE
+  VoLTE. Este orden es el de nuestras ofertas. En una respuesta manda el orden del ofertante
+  (RFC 3264 §6.1): una oferta que lista AMR antes que G.711 se contesta con AMR. Eso incluye llamadas
+  como las de §86 (AMR-NB + PCMU) si allí AMR iba primero (el orden no está registrado aquí): se
+  contestaban con PCMU, verificado en vivo, y ahora quedan en AMR, aún sin verificar. Para volver a
+  G.711 en ellas: `"codecs": ["AMR-WB", "PCMA", "PCMU"]` de nivel superior (test:
+  `TestNegotiateAMRBeforeG711`).
+- Bandwidth-efficient por defecto, octet-aligned si `fmtp` lo indica; el formato es el de AMR-WB,
+  con los tamaños de trama AMR de la Tabla 1 de RFC 4867: los modos 0–7 (4,75–12,2 kbit/s) llevan 95,
+  103, 118, 134, 148, 159, 204 y 244 bits, el SID (FT 8) 39 bits; los FT 9–14 invalidan el paquete
+  (se descarta), y AMR no tiene SPEECH_LOST.
+- Modo de codificación: el modo más alto del `mode-set` del par (p. ej., `mode-set=0,2,4,7` → modo
+  7); sin `mode-set`, modo 7 (12,2 kbit/s). CMR=15 y DTX apagado, igual que en AMR-WB.
+- Códec: un wrapper cgo en torno a `opencore-amrnb` (codificación y decodificación, opencore-amr
+  0.1.6, `Encoder_Interface_*`/`Decoder_Interface_*` sobre tramas en formato de almacenamiento),
+  `volte/media/amrnb`, enlazado estáticamente con el mismo tag `amrwb_static`. Sin cgo, no hay AMR.
+- Puente: el tramo IMS remuestrea de 8 kHz a 16 kHz y de vuelta (igual que G.711, más abajo), así que
+  los teléfonos reciben AMR en G.722 o G.711. DTMF: telephone-event/8000.
+- Aún no probado en una llamada real: queda por verificar en el router con una llamada que negocie
+  AMR (por ejemplo, ejecutando el daemon a mano con
+  `"codecs": ["AMR", "PCMA", "PCMU"]` en su configuración), y con el operador para las interconexiones.
 
 #### G.722 (ITU-T G.722)
 
@@ -1163,12 +1325,12 @@ Un mensaje inválido cuesta a lo sumo su conexión, nunca el daemon (`volte/sipn
 - Visto en llamadas con números telefónicos georgianos (§86: AMR-NB + PCMU), y con una oferta
   solo con G.711.
 - Go puro en `volte/media`.
-- Remuestreo 8↔16 kHz para el puente AMR-WB (16 kHz) ↔ PCMU (8 kHz): filtro FIR con ventana de Hamming,
+- Remuestreo 8↔16 kHz entre el puente de 16 kHz y todo códec de red de 8 kHz (PCMU, PCMA, AMR): filtro FIR con ventana de Hamming,
   33 coeficientes, historial conservado entre tramas (`src/imsd/lan_codec.go`).
 
 #### DTMF (RFC 4733)
 
-- PT=116 (telephone-event/16000) para sesiones AMR-WB.
+- PT=116 (telephone-event/16000) para sesiones AMR-WB; telephone-event/8000 para AMR y G.711.
 - Recepción: un dígito por evento, en el primer paquete de fin.
 - Implementación en `volte/media`.
 
@@ -1336,6 +1498,33 @@ recibe una segunda SIM en el mismo directorio, bajo `Slot: 2` (§118).
   teléfono siga registrado. Un teléfono ausente recibe el SMS cuando se vuelve a registrar, dentro de
   7 días.
 
+Un mensaje de un teléfono a un número va al spool `outgoing` de smsd tal como lo escribe `sendsms`
+de GL (`queue`). La codificación (`gsmSeptets`, `smsEncoding`, `smsParts`):
+
+- `Alphabet: UTF-8` y el texto tal cual cuando todos sus caracteres están en el alfabeto GSM de 7 bits
+  por defecto o en su tabla de extensión (TS 23.038 §6.2.1, la tabla de `volte/sms/gsm7.go`): ASCII
+  simple salvo el acento grave (backquote), y ñ Ñ é É ü Ü ¿ ¡ à è ì ò ù Ç ä ö Ä Ö Å å Æ æ Ø ø ß £ ¥ § €.
+  160 septetos en un SMS, 153 por parte; `€ [ ] { } ^ ~ \ |` ocupan dos (el escape y el código).
+- `Alphabet: UCS` y UTF-16 big-endian en otro caso: 70 unidades en un SMS, 67 por parte. á í ó ú
+  (y Á Í Ó Ú) no están en el alfabeto por defecto, así que "canción" va en UCS-2.
+- Quedan fuera del alfabeto GSM a propósito, y van en UCS-2 como antes: las mayúsculas griegas y ¤,
+  que ISO-8859-15 no tiene, y el salto de página (form feed). smsd recibe UTF-8 y hace él mismo la
+  conversión a septetos; que pase por ISO-8859-15 (el juego de caracteres de smstools para texto, como
+  `spoolText` lee el texto GSM recibido) no está verificado. € depende de la misma suposición:
+  ISO-8859-15 lo tiene en 0xA4, donde ISO-8859-1 tiene ¤. Si smsd pasa en cambio por ISO-8859-1, € y ¤
+  intercambian sus lugares: ¤ andaría bien y € podría quedar como `?` o perderse. Antes de este cambio
+  un texto con € iba en UCS-2, así que € es el único carácter que este cambio puede romper.
+- Una parte termina antes en vez de separar un escape de su carácter o un par sustituto (surrogate
+  pair). smsd divide el texto él mismo; el daemon cuenta las partes solo para el límite (10, si no
+  `513`) y el log.
+- Por verificar en el router, primero con "100€": que el smsd de GL envíe un texto UTF-8 con ñ o €
+  en el alfabeto GSM (no en UCS-2, no con `?`), y que el teléfono del otro lado lo muestre bien. La
+  documentación del formato de archivo de smstools3 no se pudo revisar para este cambio.
+- No implementado: la tabla de desplazamiento simple (single shift) nacional española (TS 23.038
+  anexo A.2.2), que pondría también á í ó ú en el alfabeto GSM. Cada parte necesitaría un elemento de
+  idioma nacional en su encabezado de datos de usuario (UDH), y es smsd quien arma los septetos y
+  divide el texto, así que tendría que agregarlo smsd; no se sabe si el smsd de GL puede hacerlo.
+
 Un mensaje de un teléfono a otro, por login o número corto (`textToPhone`), espera al
 destinatario dentro de la propia transacción del remitente:
 
@@ -1459,7 +1648,7 @@ Normas efectivamente usadas en el proyecto (según se mencionan en el código y 
 | RFC 3550 | RTP: A Transport Protocol for Real-Time Applications | Puente RTP, marker tras un hueco en el flujo |
 | RFC 4028 | Session Timers in SIP | `volte/call/session.go`: ambos roles, refresco vía UPDATE; 4.2, temporizador de sesión |
 | RFC 4733 | RTP Payload for DTMF Digits and Telephony Tones | telephone-event, PT=116 |
-| RFC 4867 | RTP Payload Format and File Storage Format for AMR/AMR-WB | AMR-WB bandwidth-efficient; §88, §63 |
+| RFC 4867 | RTP Payload Format and File Storage Format for AMR/AMR-WB | AMR-WB y AMR, bandwidth-efficient y octet-aligned; §88, §63 |
 | RFC 5626 | Managing Client-Initiated Connections in SIP (+sip.instance) | Bindings con un UUID de instancia |
 | RFC 7254 | A Uniform Resource Name Namespace for the GSMA and the IMEI | `urn:gsma:imei:...` en el Contact |
 | RFC 7616 / RFC 2617 | HTTP Digest Access Authentication | Autorización de los teléfonos de la LAN (MD5, `qop=auth`) |

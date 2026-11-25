@@ -26,7 +26,7 @@ lo que hace la red real.
 | github.com/emiago/sipgo | BSD-2-Clause | Parser SIP, transacciones, transporte |
 | github.com/damonto/wwan-go | MIT | Transporte AT/SIM (AT+CSIM) |
 | github.com/vishvananda/netlink (con github.com/vishvananda/netns) | Apache-2.0 | Estados y políticas XFRM a través de netlink |
-| opencore-amr, vo-amrwbenc | Apache-2.0 | Decodificador y codificador AMR-WB |
+| opencore-amr, vo-amrwbenc | Apache-2.0 | Decodificador y codificador AMR-WB, codificador y decodificador AMR-NB (opencore-amr) |
 
 ## Registro
 
@@ -98,3 +98,11 @@ lo que hace la red real.
   contacto), anexo L.2.2.1B (un nuevo registro inicial tras perderse el bearer de
   señalización SIP), §5.4.1.2.1, §5.4.1.2.2 y §5.4.2.1.2 (el nuevo
   registro reemplaza al antiguo en el S-CSCF).
+- 2026-11-25: `media`: el payload AMR (banda angosta) según RFC 4867 (BE y OA,
+  formato de almacenamiento §5.3; tamaños de trama de su Tabla 1, tomada de
+  TS 26.101) comparte el código de empaquetado con AMR-WB. `media/amrnb` es un
+  binding cgo a libopencore-amrnb del sistema (Apache-2.0); los prototipos
+  Encoder_Interface_* y Decoder_Interface_* se declaran a mano a partir de sus
+  headers públicos (`amrnb/interf_enc.h`, `amrnb/interf_dec.h` de
+  opencore-amr 0.1.6, el tarball orig de Debian fijado en
+  `package/toolchain/fetch-and-build.sh`).

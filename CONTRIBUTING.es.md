@@ -51,6 +51,63 @@ La prueba de XFRM de
 afecte el módem, el lado IMS o los teléfonos también debe probarse en un Mudi 7;
 indica en el pull request en qué lo probaste.
 
+En Windows (Git Bash) también corre una parte de esto:
+
+- Go: `volte/auth`, `volte/media`, `volte/media/g722` y `volte/srtp` se
+  prueban de forma nativa. `volte/ipsec` también compila en Windows, pero dos
+  de sus pruebas (`TestRemoveOwnedThroughIP*`) fallan ahí porque ejecutan un
+  script `ip` de reemplazo; el resto de `volte` y el daemon solo compilan para
+  Linux, así que corre `go test ./auth/ ./media/... ./srtp/` en vez de
+  `go test ./...`. `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go vet ./...` en `volte/` y
+  `src/imsd/` revisa sus tipos; sus pruebas corren en el CI (o en un equipo
+  con Linux).
+- `lifecycle.test.py` corre con el Python de Windows
+  (`python -I package/tests/lifecycle.test.py`) y un `busybox` en el `PATH`.
+  Sirve un `busybox.cmd` que descarta su primer argumento (`ash`) e inicia el
+  `sh.exe` de Git:
+
+  ```bat
+  @echo off
+  shift
+  "C:\Program Files\Git\usr\bin\sh.exe" %1 %2 %3 %4 %5 %6 %7 %8 %9
+  ```
+
+  La única prueba que necesita los identificadores de proceso de POSIX se
+  omite ahí.
+- `sh package/tests/run.sh` funciona tal cual con node y npm en el `PATH`.
+- `.gitattributes` mantiene todos los archivos de texto con LF, también con
+  `core.autocrlf=true`. Un checkout hecho antes de que existiera ese archivo
+  todavía tiene archivos con CRLF;
+  `git rm --cached -r -q . && git reset -q --hard` (con el árbol limpio) los
+  vuelve a extraer con LF. Construye los
+  paquetes solo desde un árbol con LF: si no, los scripts llegarían al router
+  con CR.
+
+El CI (`.github/workflows/ci.yml`) ejecuta todo lo anterior en cada push a
+`main` y en cada pull request, y a pedido en cualquier rama: Actions > CI >
+Run workflow, o `gh workflow run ci.yml --ref RAMA`. En un fork, GitHub no
+ejecuta ningún workflow hasta que se habilitan en su pestaña Actions.
+
+## Versiones publicadas
+
+`.github/workflows/release.yml` construye y publica una versión: la
+compilación estática corre en un contenedor de Debian 13 (trixie) en el
+runner arm64 de GitHub, luego `package/build.sh` genera `dist/` con un
+`install.sh` que apunta a esa versión, y la versión publicada recibe todos
+los archivos de `dist/` (el `.ipk`, los paquetes de traducción,
+`install.sh`, `SHA256SUMS`) con la sección de la versión de `CHANGELOG.md`
+como notas. Para publicar una:
+
+1. Fija la versión en `package/VERSION` (el esquema del fork está en
+   [CHANGELOG.es.md](CHANGELOG.es.md)) y ponle la fecha a su sección en
+   `CHANGELOG.md` y `CHANGELOG.es.md`; haz el commit en `main`.
+2. Ponle a ese commit el tag `v` + la versión y sube el tag:
+   `git tag v0.2.0.1 && git push origin v0.2.0.1`. Un tag que no coincide con
+   `package/VERSION` detiene el workflow.
+3. Una ejecución fallida se puede repetir para el mismo tag: Actions >
+   Release > Run workflow; reemplaza los archivos de una versión ya
+   publicada.
+
 ## Código
 
 - El código Go se formatea con `gofmt`; los scripts de shell pasan `shellcheck`; los comentarios y
@@ -83,7 +140,21 @@ Después de cambiar textos:
 python3 package/toolchain/i18n.py extract   # código → package/po/templates/mudi-volte.pot
 python3 package/toolchain/i18n.py update    # .pot → package/po/<idioma>/mudi-volte.po
 python3 package/toolchain/i18n.py check     # todo traducido, marcadores coinciden
+python3 package/tests/i18n.test.py          # las pruebas de la revisión de la pantalla
 ```
+
+`check` además compara `package/po/<idioma>/mudi-screen-volte.tsv` con los
+textos que puede imprimir la app de pantalla
+(`usr/share/mudi-screen/apps/volte/app.sh`) e indica los que no tienen una línea
+en él. Lee `app.sh` por sus formas, no como un shell: los valores de
+`json_add_string` con las claves `title`, `subtitle`, `text`, `label`, `value`,
+`confirm` y `confirm_label`, la etiqueta y el valor de `info` y `section`, lo
+que `echo` imprime en la salida estándar (`phase_text`, `ago`, la respuesta a
+una acción), los valores que reciben las variables que estos muestran y los
+valores por defecto de `${var:-defecto}`. Las partes variables (`$var`,
+`$(...)`, `$((...))`, `{elapsed:...}`) pasan a ser `{}`; una variable sola, o
+solo nombres como `VoLTE`, no es un texto. Un texto impreso de otra forma
+(`printf`, un here-document) no se detecta: mantén `app.sh` en estas formas.
 
 Un idioma nuevo: copia la cabecera de `package/po/es/mudi-volte.po` en
 `package/po/<idioma>/mudi-volte.po`, ejecuta `update`, completa cada `msgstr` y

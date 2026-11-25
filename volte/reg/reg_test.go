@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/netip"
@@ -62,12 +63,17 @@ func (f *fakeSIM) Authenticate(_ context.Context, r, _ [16]byte) (sim.AuthResult
 type fakeRunner struct {
 	mu   sync.Mutex
 	cmds []string
+	fail string // a command that contains it fails, as with a cipher the kernel lacks
 }
 
 func (f *fakeRunner) Run(_ context.Context, args ...string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.cmds = append(f.cmds, strings.Join(args, " "))
+	cmd := strings.Join(args, " ")
+	f.cmds = append(f.cmds, cmd)
+	if f.fail != "" && strings.Contains(cmd, f.fail) {
+		return errors.New("fake runner: " + f.fail + " refused")
+	}
 	return nil
 }
 
@@ -118,6 +124,7 @@ type fakePCSCF struct {
 	other        func(*sipnet.Conn, *sip.Request) // requests that are neither REGISTER nor SUBSCRIBE
 	lost         bool                             // the UE's access network is gone: nothing it sends over SAs gets an answer
 	afterLoss    []string                         // the methods of what it sent all the same
+	secAlgs      string                           // the algorithms of Security-Server, mechanisms split by ","; "" = alg=hmac-md5-96;prot=esp;mod=trans;ealg=null
 
 	challenges int
 	held       *challenge      // the SAs in use
@@ -204,8 +211,16 @@ func (f *fakePCSCF) challengeLocked(client auth.Mechanism, raw string, protected
 	if f.movePortC {
 		portC += f.challenges - 1
 	}
-	ch.secServer = fmt.Sprintf("ipsec-3gpp;alg=hmac-md5-96;prot=esp;mod=trans;ealg=null;spi-c=%d;spi-s=%d;port-c=%d;port-s=%d",
-		6999+2*f.challenges, 7000+2*f.challenges, portC, f.prt.Addr().Port())
+	algs := f.secAlgs
+	if algs == "" {
+		algs = "alg=hmac-md5-96;prot=esp;mod=trans;ealg=null"
+	}
+	var mechs []string
+	for _, a := range strings.Split(algs, ",") {
+		mechs = append(mechs, fmt.Sprintf("ipsec-3gpp;%s;spi-c=%d;spi-s=%d;port-c=%d;port-s=%d",
+			a, 6999+2*f.challenges, 7000+2*f.challenges, portC, f.prt.Addr().Port()))
+	}
+	ch.secServer = strings.Join(mechs, ", ")
 	f.pending, f.sas[client.PortC] = ch, true
 	f.rand, f.secServer, f.secClient = ch.rand, ch.secServer, client
 	if f.mirror != nil {

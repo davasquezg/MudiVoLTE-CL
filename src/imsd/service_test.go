@@ -547,7 +547,7 @@ func TestURINumber(t *testing.T) {
 
 func TestNetSwitchWithoutNetwork(t *testing.T) {
 	var n netSwitch
-	_, err := n.Dial(context.Background(), "+447700900001")
+	_, err := n.Dial(context.Background(), "+447700900001", "")
 	var de *dialError
 	if !errors.As(err, &de) || de.Code != 503 {
 		t.Fatalf("without a network want 503: %v", err)

@@ -1,0 +1,11 @@
+# Line endings: every text file is stored and checked out with LF, also on
+# Windows (core.autocrlf=true would otherwise check the scripts out with CRLF,
+# and a package built from such a tree carries the \r to the router).
+* text=auto eol=lf
+
+# Binary files: images, audio test vectors, packages and archives.
+*.png binary
+*.g722 binary
+*.raw binary
+*.ipk binary
+*.gz binary

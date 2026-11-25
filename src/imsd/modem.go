@@ -2,7 +2,8 @@ package main
 
 // Modem state for the service mode (S5): the external IMS mode, network
 // registration, the radio access type and the radio restart (CFUN 4→1). All
-// commands go through ATLink, that is, in the confirmed SUB1 context (§69).
+// commands go through ATLink, that is, in the confirmed context of the line's
+// subscription (imsSlot, §69).
 
 import (
 	"context"

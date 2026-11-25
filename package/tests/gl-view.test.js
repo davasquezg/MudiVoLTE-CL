@@ -323,6 +323,51 @@ async function main() {
 	html = await renderer.renderToString(fresh);
 	assert.ok(html.includes('Cannot reach the mudi-volte service'));
 
+	// The page's language: mudi-volte.main.lang, else the panel's locale (or the
+	// browser's) when the router has a catalog for it or for its base language.
+	// No catalog on the router: English, and no get_i18n call.
+	answers.get_i18n = (a) => (a.lang === 'es' ? { lang: 'es', strings: { 'Calls & SMS': 'Llamadas y SMS' } } : { lang: '', strings: {} });
+	const i18nCalls = () => calls.filter((c) => c[0] === 'get_i18n').map((c) => c[1].lang);
+	const openPage = async (st, locale) => {
+		calls.length = 0;
+		answers.get_status = Object.assign({}, status, st);
+		Vue.prototype.$i18n = locale === undefined ? undefined : { locale };
+		const v = new Vue(page);
+		await settle();
+		delete Vue.prototype.$i18n;
+		return [v, await renderer.renderToString(v)];
+	};
+	let v;
+	[v, html] = await openPage({ lang: '', langs: ['es'] }, 'es-CL');
+	assert.deepStrictEqual(i18nCalls(), ['es'], 'es-CL falls back to the catalog es');
+	assert.ok(html.includes('Llamadas y SMS') && !html.includes('Calls &amp; SMS'), 'Spanish page');
+	v.$destroy();
+	[v, html] = await openPage({ lang: '', langs: ['es', 'es_cl'] }, 'es-CL');
+	assert.deepStrictEqual(i18nCalls(), ['es_cl'], 'es-CL takes the catalog es_cl first');
+	v.$destroy();
+	[v, html] = await openPage({ lang: 'es', langs: ['es'] }, 'en-US');
+	assert.deepStrictEqual(i18nCalls(), ['es'], 'mudi-volte.main.lang wins over the panel');
+	assert.ok(html.includes('Llamadas y SMS'), 'Spanish page from the setting');
+	v.$destroy();
+	// The browser's language when the panel has none.
+	const realNavigator = Object.getOwnPropertyDescriptor(global, 'navigator');
+	Object.defineProperty(global, 'navigator', { value: { language: 'es-CL' }, configurable: true, writable: true });
+	[v, html] = await openPage({ lang: '', langs: ['es'] });
+	assert.deepStrictEqual(i18nCalls(), ['es'], "the browser's es-CL takes es");
+	v.$destroy();
+	[v, html] = await openPage({ lang: '' });
+	assert.deepStrictEqual(i18nCalls(), [], 'no catalog on the router, no get_i18n');
+	assert.ok(html.includes('Calls &amp; SMS'), 'English without a catalog');
+	v.$destroy();
+	if (realNavigator)
+		Object.defineProperty(global, 'navigator', realNavigator);
+	else
+		delete global.navigator;
+	[v, html] = await openPage({ lang: '', langs: ['es'] }, 'fr-FR');
+	assert.deepStrictEqual(i18nCalls(), [], 'no catalog for fr, no get_i18n');
+	assert.ok(html.includes('Calls &amp; SMS'), 'English for a language without a catalog');
+	v.$destroy();
+
 	assert.deepStrictEqual(warnings, [], 'Vue warnings');
 	console.log('gl-view: ok');
 	process.exit(0);

@@ -3,6 +3,8 @@
 
 No router, root privileges or network needed. BusyBox ash when available,
 otherwise /bin/sh. Absolute device/config paths are replaced before execution.
+On Windows it runs with a busybox (or a shim that starts Git Bash's sh) on
+PATH; the one test that needs POSIX process ids is skipped there.
 """
 import hashlib
 import os
@@ -16,8 +18,15 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SHELL = [shutil.which("busybox"), "ash"] if shutil.which("busybox") else ["/bin/sh"]
-SOURCE, DISPATCH = (ROOT / "package/files/usr/sbin/mudi-volte").read_text().split('\ncase "${1:-}" in\n', 1)
-VERSION = (ROOT / "package/VERSION").read_text().strip()
+# Windows (native Python, a busybox or sh from Git Bash/MSYS2 on PATH) cannot
+# start a script by its #! line: the tests start the scripts through SHELL
+# there, and the scripts the shell starts in turn get the shell's own /bin/sh
+# (SHELL[0] is a Windows path, which a #! line cannot hold). POSIX hosts run
+# exactly as before.
+WINDOWS = os.name == "nt"
+SHEBANG = "#!/bin/sh" if WINDOWS else "#!" + " ".join(SHELL)
+SOURCE, DISPATCH = (ROOT / "package/files/usr/sbin/mudi-volte").read_text(encoding="utf-8").split('\ncase "${1:-}" in\n', 1)
+VERSION = (ROOT / "package/VERSION").read_text(encoding="utf-8").strip()
 # prerm finds opkg's flags in /proc, the CLI tells a live run by its /proc
 # entry. A host without /proc (macOS) gets a /proc of the sandbox for prerm
 # (FAKE_PROC) and kill -0 for the CLI.
@@ -66,6 +75,8 @@ voice_disable() { echo "${VD:-2}"; }
 mode_pref() { echo AUTO; }
 voice_domain() { echo "${VDOM:-3}"; }
 ue_usage() { echo "${UE:-0}"; }
+# SA=none: the modem gives no value for nr5g_disable_mode.
+nr5g_disable_mode() { [ "${SA:-0}" = none ] || echo "${SA:-0}"; }
 at() { echo 001010000000000; }
 at_set() {
  echo "$1" >>"$SB/at"
@@ -90,12 +101,12 @@ class Lifecycle(unittest.TestCase):
         # Replace even unused absolute paths: a mistake must not affect the host.
         src = SOURCE.replace("/etc/init.d/gl_screen", "screen_stub")
         src = src.replace("/etc/init.d/mudi-screen", "mudi_screen_stub")
-        src = src.replace("/etc/config/mudi-volte", str(self.sb / "config"))
+        src = src.replace("/etc/config/mudi-volte", (self.sb / "config").as_posix())
         self.base = src + "\n" + STUBS
 
     def script(self, command, name="case.sh"):
         p = self.sb / name
-        p.write_text(self.base + "\n" + command + "\n")
+        p.write_text(self.base + "\n" + command + "\n", encoding="utf-8", newline="\n")
         return p
 
     def run_case(self, command, **env):
@@ -105,12 +116,12 @@ class Lifecycle(unittest.TestCase):
 
     def read(self, name):
         p = self.sb / name
-        return p.read_text() if p.exists() else ""
+        return p.read_text(encoding="utf-8") if p.exists() else ""
 
     def saved(self):
         (self.sb / "data").mkdir(exist_ok=True)
         (self.sb / "data/modem.orig").write_text(
-            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n")
+            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n", encoding="utf-8", newline="\n")
 
     def test_uninstall_without_backup_does_not_change_builtin_modem(self):
         r = self.run_case("restore_builtin remove", MODE="1")
@@ -122,7 +133,7 @@ class Lifecycle(unittest.TestCase):
         for failed in ('QCFG="ims"', 'voice_disable', 'voice_domain', 'ue_usage_setting'):
             with self.subTest(failed=failed):
                 self.saved()
-                (self.sb / "events").write_text("")
+                (self.sb / "events").write_text("", encoding="utf-8", newline="\n")
                 r = self.run_case("restore_builtin remove", MODE="2", FAIL_AT=failed)
                 self.assertNotEqual(r.returncode, 0)
                 self.assertTrue((self.sb / "data/modem.orig").exists())
@@ -154,6 +165,47 @@ class Lifecycle(unittest.TestCase):
         self.assertIn("enabled=1", self.read("events"))
         self.assertIn("reboot", self.read("events"))
 
+    def test_restore_gives_5g_standalone_back(self):
+        # Saved by setup --no-sa: written back last, then committed.
+        for sa, writes in (("1", ['AT+QNWPREFCFG="nr5g_disable_mode",0']), ("0", [])):
+            with self.subTest(now=sa):
+                self.saved_sa()
+                (self.sb / "at").unlink(missing_ok=True)
+                r = self.run_case("modem_give_back", SA=sa, **EXTERNAL)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(self.read("at").splitlines(), WRITES + writes + ["AT+QEFSSYNC=0"])
+
+    def test_refused_5g_standalone_restore_sets_everything_back(self):
+        self.saved_sa()
+        r = self.run_case("modem_give_back", SA="1", FAIL_AT='nr5g_disable_mode",0', **EXTERNAL)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("could not restore nr5g_disable_mode 0", r.stderr)
+        self.assertEqual(self.read("at").splitlines(),
+                         WRITES + ['AT+QNWPREFCFG="nr5g_disable_mode",0',
+                                   'AT+QNWPREFCFG="ue_usage_setting",1', 'AT+QNWPREFCFG="voice_domain",1',
+                                   'AT+QCALLCFG="voice_disable",3', 'AT+QCFG="ims",2'])
+
+    def saved_sa(self):
+        self.saved()
+        with (self.sb / "data/modem.orig").open("a") as f:
+            f.write("nr5g_disable_mode=0\n")
+
+    def test_5g_standalone_reply_parsing(self):
+        # The real nr5g_disable_mode (STUBS replace it): the reply format is
+        # not verified on the router, so the read takes spaces around the
+        # comma and a CR, and gives nothing for a reply without a digit.
+        real = re.search(r"^nr5g_disable_mode\(\) \{.*\}$", SOURCE, re.M).group(0)
+        for reply, value in (('+QNWPREFCFG: "nr5g_disable_mode",0\r', "0"),
+                             ('+QNWPREFCFG: "nr5g_disable_mode" , 1', "1"),
+                             ('+QNWPREFCFG: "nr5g_disable_mode",2', "2"),
+                             ('+QNWPREFCFG: "nr5g_disable_mode",', ""),
+                             ("ERROR", "")):
+            with self.subTest(reply=reply):
+                r = self.run_case(real + '\nat() { printf \'%s\\n\' "$REPLY_AT"; }\n'
+                                  'echo "[$(nr5g_disable_mode)]"', REPLY_AT=reply)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(r.stdout.strip(), "[%s]" % value)
+
     def test_external_without_backup_uses_factory_voice_defaults(self):
         r = self.run_case("save_orig", MODE="2", VDOM="1", UE="1")
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -162,7 +214,7 @@ class Lifecycle(unittest.TestCase):
         self.assertIn("ue_usage=0\n", saved)
 
     def test_init_keeps_each_allowed_number_as_one_value(self):
-        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text()
+        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text(encoding="utf-8")
         init = init.replace(". /usr/share/libubox/jshn.sh", "")
         command = init + r'''
 config_get() { eval "$1=\$4"; }
@@ -189,6 +241,138 @@ build_config
         self.assertEqual(self.read("allowed").splitlines(),
                          ['+44 7700 900123', '+1 (555) 100-2222'])
 
+    def test_init_passes_the_number_plan(self):
+        # national_len, the emergency list and emergency_urn reach the sip
+        # block; unset, the daemon takes the country's defaults.
+        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text()
+        init = init.replace(". /usr/share/libubox/jshn.sh", "")
+        stubs = r'''
+config_get() {
+ case "$3" in
+ national_len) eval "$1=\${NATIONAL_LEN-\$4}" ;;
+ country) eval "$1=\${COUNTRY-56}" ;;
+ *) eval "$1=\$4" ;;
+ esac
+}
+config_get_bool() { case "$3" in emergency_urn) eval "$1=${URN:-0}" ;; *) eval "$1=\$4" ;; esac; }
+config_foreach() { :; }
+config_list_foreach() {
+ [ "$2" = emergency ] || return 0
+ for e in $EMERGENCY_LIST; do "$3" "$e" "${4:-}"; done
+}
+json_init() { :; }
+json_add_array() { array=$1; }
+json_close_array() { array=; }
+json_add_string() { [ "$array" != emergency ] || printf 'emergency %s\n' "$2" >>"$SB/plan"; }
+json_add_object() { :; }
+json_close_object() { :; }
+json_add_int() { [ "$1" != national_len ] || printf 'national_len %s\n' "$2" >>"$SB/plan"; }
+json_add_boolean() { [ "$1" != emergency_urn ] || printf 'emergency_urn %s\n' "$2" >>"$SB/plan"; }
+json_dump() { :; }
+build_config
+'''
+        cases = [
+            ({}, ["emergency_urn 0"]),
+            ({"NATIONAL_LEN": "9", "EMERGENCY_LIST": "133=police 112", "URN": "1"},
+             ["national_len 9", "emergency 133=police", "emergency 112", "emergency_urn 1"]),
+            ({"NATIONAL_LEN": "-1"}, ["national_len -1", "emergency_urn 0"]),
+            ({"NATIONAL_LEN": "nine"}, ["emergency_urn 0"]),
+            ({"NATIONAL_LEN": "9-"}, ["emergency_urn 0"]),
+            # Without a country national_len means nothing: left out, so that
+            # the daemon does not refuse the config.
+            ({"NATIONAL_LEN": "9", "COUNTRY": ""}, ["emergency_urn 0"]),
+        ]
+        for env, want in cases:
+            with self.subTest(env=env):
+                (self.sb / "plan").write_text("")
+                r = self.run_case(init + stubs, **env)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(self.read("plan").splitlines(), want)
+
+    def test_country_code_from_the_mcc(self):
+        # Setup fills mudi-volte.main.country from the SIM's MCC: Chile (730)
+        # turns on the national number rule and the emergency list.
+        for mcc, want in (('730', '56'), ('234', '44'), ('724', '55'), ('999', '')):
+            with self.subTest(mcc=mcc):
+                r = self.run_case(f'country_code {mcc}')
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(r.stdout.strip(), want)
+
+    # The operator settings of /etc/config/mudi-volte (#10, #11) reach the
+    # daemon's JSON under its own names; unset ones stay out of it, so the
+    # daemon finds them itself.
+    OPERATOR = r'''
+config_get() {
+ v=''
+ if [ -n "${OPS:-}" ]; then
+  case "$3" in
+  pcscf_port) v=${PORT:-5070} ;;
+  imei) v=490154203237518 ;;
+  domain) v=ims.mnc001.mcc001.3gppnetwork.org ;;
+  smsc) v=+447700900000 ;;
+  network_codecs) v='PCMA PCMU' ;;
+  ims_profile) v=3 ;;
+  ims_apn) v=ims.operator ;;
+  loose_inbound_src_port) v=0 ;;
+  esac
+ fi
+ [ -n "$v" ] || v=$4
+ eval "$1=\$v"
+}
+config_get_bool() { config_get "$@"; }
+config_foreach() { :; }
+config_list_foreach() {
+ [ "$2" = ipsec_offer ] && [ -n "${OPS:-}" ] || return 0
+ "$3" hmac-sha-1-96/null "${4:-}"
+ "$3" hmac-md5-96/aes-cbc "${4:-}"
+}
+obj=; array=
+json_init() { :; }
+json_add_object() { obj=$1; }
+json_close_object() { obj=; }
+json_add_array() { array=$1; }
+json_close_array() { array=; }
+json_add_string() { echo "$obj|$array|string $1=$2" >>"$SB/json"; }
+json_add_int() { echo "$obj|$array|int $1=$2" >>"$SB/json"; }
+json_add_boolean() { echo "$obj|$array|bool $1=$2" >>"$SB/json"; }
+json_dump() { :; }
+build_config
+'''
+
+    def build_json(self, **env):
+        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text()
+        init = init.replace(". /usr/share/libubox/jshn.sh", "")
+        r = self.run_case(init + self.OPERATOR, **env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return self.read("json").splitlines()
+
+    def test_init_maps_the_operator_settings(self):
+        lines = self.build_json(OPS="1")
+        for want in ("||int pcscf_port=5070", "||string imei=490154203237518",
+                     "||string domain=ims.mnc001.mcc001.3gppnetwork.org",
+                     "||string smsc=+447700900000", "||int ims_profile=3",
+                     "||string ims_apn=ims.operator",
+                     "||bool loose_inbound_src_port=0"):
+            self.assertIn(want, lines)
+        # The network's codecs at the top, the phones' ones in the sip block.
+        self.assertEqual([l for l in lines if l.startswith("|codecs|")],
+                         ["|codecs|string =PCMA", "|codecs|string =PCMU"])
+        self.assertIn("sip|codecs|string =G722", lines)
+        self.assertEqual([l for l in lines if l.startswith("|ipsec_offers|")],
+                         ["|ipsec_offers|string =hmac-sha-1-96/null",
+                          "|ipsec_offers|string =hmac-md5-96/aes-cbc"])
+
+    def test_init_leaves_unset_operator_settings_to_the_daemon(self):
+        lines = self.build_json()
+        for name in ("pcscf_port", "imei", "domain", "smsc", "ims_profile",
+                     "ims_apn", "loose_inbound_src_port"):
+            self.assertFalse([l for l in lines if l.split(" ", 1)[-1].startswith(name + "=")], name)
+        self.assertFalse([l for l in lines if l.startswith(("|codecs|", "|ipsec_offers|"))])
+
+    def test_init_passes_a_port_that_is_no_number_for_the_daemon_to_refuse(self):
+        lines = self.build_json(OPS="1", PORT="50x")
+        self.assertIn("||string pcscf_port=50x", lines)
+
     def test_setup_requires_the_dsi_api(self):
         for library in ("available", "missing", "missing-symbol"):
             with self.subTest(library=library):
@@ -197,6 +381,34 @@ build_config
                 if library != "available":
                     self.assertIn("cannot load the firmware's DSI API", r.stderr)
                     self.assertEqual(self.read("at"), "")
+
+    def test_country_codes_of_latin_america(self):
+        # Issue #4: a Chilean SIM (MCC 730) left the country code empty. MCCs
+        # that several calling codes share stay without one.
+        want = {"730": "56", "716": "51", "732": "57", "722": "54", "724": "55", "334": "52",
+                "702": "501", "750": "500", "370": "1", "342": "1", "368": "53", "372": "509",
+                "363": "297", "214": "34", "340": "", "362": "", "001": ""}
+        r = self.run_case("for m in %s; do echo \"$m=$(country_code $m)\"; done" % " ".join(want))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.splitlines(), ["%s=%s" % kv for kv in want.items()])
+
+    def test_setup_says_the_country_code_it_chose(self):
+        # No country set yet, a Chilean SIM; the question is answered no.
+        r = self.run_case('uci() { echo "uci $*" >>"$SB/events"; }\n'
+                          "at() { echo 730010000000000; }\ncmd_setup", AGREE="no")
+        self.assertIn("Country calling code: +56, chosen from the MCC of the SIM", r.stdout)
+        self.assertIn("uci set mudi-volte.main.country=56", self.read("events"))
+
+    def test_setup_says_the_country_code_set_before(self):
+        r = self.run_case("cmd_setup", AGREE="no")
+        self.assertIn("Country calling code: +44 (mudi-volte.main.country).", r.stdout)
+        self.assertNotIn("set mudi-volte.main.country", self.read("events"))
+
+    def test_setup_says_when_it_knows_no_country_code(self):
+        r = self.run_case('uci() { echo "uci $*" >>"$SB/events"; }\ncmd_setup', AGREE="no")
+        self.assertIn("No country calling code known for MCC 001", r.stdout)
+        self.assertIn("uci set mudi-volte.main.country=CODE", r.stdout)
+        self.assertNotIn("set mudi-volte.main.country", self.read("events"))
 
     def test_qr_handoff_restores_screen_only_after_last_code(self):
         first = subprocess.Popen(SHELL + [str(self.script("screen_loop alpha 30 url", "first.sh"))],
@@ -218,7 +430,7 @@ build_config
     def test_qr_without_mudiscreen(self):
         # MudiScreen not installed: GL.iNet's screen is stopped for the code and
         # started again, as in 0.1.0, and nothing asks for MudiScreen.
-        (self.sb / "busy").write_text("2")
+        (self.sb / "busy").write_text("2", encoding="utf-8", newline="\n")
         r = self.run_case("screen_loop alpha 1 url", QR_SECS="0.05", MUDI_SCREEN="absent")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.read("events").splitlines(),
@@ -348,12 +560,12 @@ class RawPackageRemoval(unittest.TestCase):
         self.sb = sb = Path(self.tmp.name)
         (sb / "data").mkdir()
         (sb / "data/modem.orig").write_text(
-            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n")
-        (sb / "data/push.json").write_text("[]\n")
-        (sb / "config").write_text("config voip 'main'\n\toption enabled '1'\n")
+            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n", encoding="utf-8", newline="\n")
+        (sb / "data/push.json").write_text("[]\n", encoding="utf-8", newline="\n")
+        (sb / "config").write_text("config voip 'main'\n\toption enabled '1'\n", encoding="utf-8", newline="\n")
         (sb / "run").mkdir()
-        (sb / "run/imsd.json").write_text("{}\n")
-        (sb / "installed").write_text(VERSION + "-1\n")
+        (sb / "run/imsd.json").write_text("{}\n", encoding="utf-8", newline="\n")
+        (sb / "installed").write_text(VERSION + "-1\n", encoding="utf-8", newline="\n")
         (sb / "info").mkdir()
         for name in ("prerm", "postrm"):
             self.executable("info/" + name, self.maintainer_script(name))
@@ -364,11 +576,11 @@ class RawPackageRemoval(unittest.TestCase):
 
     def executable(self, name, body):
         p = self.sb / name
-        p.write_text("#!" + " ".join(SHELL) + "\n" + body)
+        p.write_text(SHEBANG + "\n" + body,encoding="utf-8", newline="\n")
         p.chmod(0o755)
 
     def maintainer_script(self, name):
-        s = (ROOT / "package/control" / name).read_text()
+        s = (ROOT / "package/control" / name).read_text(encoding="utf-8")
         for a, b in (("/var/run/mudi-volte-removal", "$SB/removal"),
                      ("/var/run/mudi-volte", "$SB/run"),
                      ("/usr/sbin/mudi-volte", "$SB/cli"),
@@ -397,7 +609,7 @@ nginx() { echo "nginx $*" >>"$SB/events"; }
         """The CLI with the stubs of Lifecycle, as an executable file; the real
         ask, which records each question."""
         src = SOURCE.replace("/etc/init.d/gl_screen", "screen_stub")
-        src = src.replace("/etc/config/mudi-volte", str(self.sb / "config"))
+        src = src.replace("/etc/config/mudi-volte", (self.sb / "config").as_posix())
         if not HOST_PROC:
             src = swap(src, '[ -d "/proc/$pid" ]', 'kill -0 "$pid" 2>/dev/null')
         src = swap(src, "\nask() {", "\nreal_ask() {")
@@ -413,15 +625,19 @@ nginx() { echo "nginx $*" >>"$SB/events"; }
         env = {**os.environ, "SB": str(self.sb), **EXTERNAL, **env}
         if path:
             env["PATH"] = path + os.pathsep + env["PATH"]
+        if WINDOWS and args[:len(SHELL)] != SHELL:
+            args = SHELL + list(args)
         return subprocess.run(args, env=env, text=True, capture_output=True, timeout=30,
                               stdin=subprocess.DEVNULL, start_new_session=True)
 
     def opkg(self, *args, **env):
-        return self.run_sh([str(self.sb / "bin/opkg"), *args], **env)
+        # prerm looks for "/opkg" on opkg's command line; on Windows str()
+        # would give it backslashes (on POSIX both are the same).
+        return self.run_sh([(self.sb / "bin/opkg").as_posix(), *args], **env)
 
     def read(self, name):
         p = self.sb / name
-        return p.read_text() if p.exists() else ""
+        return p.read_text(encoding="utf-8") if p.exists() else ""
 
     def events(self):
         return self.read("events").splitlines()
@@ -529,15 +745,15 @@ nginx() { echo "nginx $*" >>"$SB/events"; }
     def test_reinstall_by_install_sh_keeps_the_modem_and_the_data(self):
         sb = self.sb
         ipk = self.ipk(VERSION)
-        script = (ROOT / "package/install.sh.in").read_text()
-        script = swap(script, "/proc/device-tree/model", str(sb / "model"))
+        script = (ROOT / "package/install.sh.in").read_text(encoding="utf-8")
+        script = swap(script, "/proc/device-tree/model", (sb / "model").as_posix())
         script = script.replace("@VERSION@", VERSION).replace("@BASE_URL@", "http://example.invalid")
         script = swap(script, "@SHA256@", hashlib.sha256(ipk.read_bytes()).hexdigest())
         # Not a stub of id on PATH: a BusyBox built to prefer its applets (as on
         # the CI runner) runs its own id and never looks at PATH.
         script = swap(script, '[ "$(id -u)" = 0 ]', "[ 0 = 0 ]")
-        (sb / "install.sh").write_text(script)
-        (sb / "model").write_text("GL.iNet GL-E5800\0")
+        (sb / "install.sh").write_text(script, encoding="utf-8", newline="\n")
+        (sb / "model").write_text("GL.iNet GL-E5800\0", encoding="utf-8", newline="\n")
         self.executable("bin/uci", 'echo "uci $*" >>"$SB/events"\n')
         r = self.run_sh(SHELL + [str(sb / "install.sh"), str(ipk)], path=str(sb / "bin"))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -638,6 +854,8 @@ SETUP = ['AT+QCFG="ims",2', 'AT+QCALLCFG="voice_disable",3',
 BEFORE = ['AT+QCFG="ims",1', 'AT+QCALLCFG="voice_disable",2',
           'AT+QNWPREFCFG="ue_usage_setting",0', 'AT+QNWPREFCFG="voice_domain",3']
 OWN_VOICE = {"MODE": "1", "VD": "2", "VDOM": "3", "UE": "0"}
+# setup --no-sa: 5G standalone off, after the values above.
+NO_SA = 'AT+QNWPREFCFG="nr5g_disable_mode",1'
 
 
 class FailedSetup(unittest.TestCase):
@@ -653,10 +871,10 @@ class FailedSetup(unittest.TestCase):
         self.sb = sb = Path(self.tmp.name)
         (sb / "lpm").mkdir()
         for k, v in LPM.items():
-            (sb / "lpm" / k).write_text(v + "\n")
+            (sb / "lpm" / k).write_text(v + "\n", encoding="utf-8", newline="\n")
         src = SOURCE.replace("/etc/init.d/gl_screen", "screen_stub")
-        src = swap(src, "/etc/init.d/lpm_monitor", str(sb / "lpm_monitor"))
-        src = src.replace("/etc/config/mudi-volte", str(sb / "config"))
+        src = swap(src, "/etc/init.d/lpm_monitor", (sb / "lpm_monitor").as_posix())
+        src = src.replace("/etc/config/mudi-volte", (sb / "config").as_posix())
         stubs = swap(STUBS, "power_saving_off() { :; }\npower_saving_restore() { :; }\n", "")
         # FAIL_UNDO: a second value the modem refuses, for a failed undo.
         stubs = swap(stubs, ' case "$1" in *"${FAIL_AT:-not-a-command}"*) return 1 ;; esac\n',
@@ -667,13 +885,13 @@ class FailedSetup(unittest.TestCase):
 
     def setup(self, *args, **env):
         p = self.sb / "case.sh"
-        p.write_text(self.base + "\ncmd_setup " + " ".join(args) + "\n")
+        p.write_text(self.base + "\ncmd_setup " + " ".join(args) + "\n", encoding="utf-8", newline="\n")
         return subprocess.run(SHELL + [str(p)], env={**os.environ, "SB": str(self.sb), **env},
                               text=True, capture_output=True, timeout=10)
 
     def read(self, name):
         p = self.sb / name
-        return p.read_text() if p.exists() else ""
+        return p.read_text(encoding="utf-8") if p.exists() else ""
 
     def lpm(self):
         return {k: self.read("lpm/" + k).strip() for k in LPM}
@@ -708,6 +926,77 @@ class FailedSetup(unittest.TestCase):
         self.assertEqual(self.read("at").splitlines(),
                          SETUP + ['AT+QNWPREFCFG="mode_pref",LTE:NR5G'] + BEFORE[::-1])
 
+    def test_no_sa_turns_5g_standalone_off(self):
+        # Issue #7: --lte-only (mode_pref LTE:NR5G) leaves 5G SA on, where the
+        # line does not come up. --no-sa writes nr5g_disable_mode 1 last and
+        # keeps the value from before for the restore.
+        r = self.setup("--no-sa")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), SETUP + [NO_SA])
+        self.assertIn("nr5g_disable_mode=0\n", self.read("data/modem.orig"))
+
+    def test_setup_without_no_sa_keeps_5g_standalone(self):
+        r = self.setup()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("nr5g_disable_mode", self.read("at") + self.read("data/modem.orig"))
+
+    def test_refused_sa_off_fails_the_setup(self):
+        r = self.setup("--no-sa", FAIL_AT="nr5g_disable_mode")
+        self.assertLeftAlone(r)
+        self.assertIn("the modem refused " + NO_SA, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), SETUP + [NO_SA] + BEFORE[::-1])
+        self.assertFalse((self.sb / "data/modem.orig").exists())  # saved by this run
+
+    def test_refused_sa_off_takes_its_saved_value_out_again(self):
+        # modem.orig of an earlier setup without --no-sa stays as it was.
+        (self.sb / "data").mkdir()
+        saved = "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n"
+        (self.sb / "data/modem.orig").write_text(saved)
+        r = self.setup("--no-sa", FAIL_AT="nr5g_disable_mode")
+        self.assertLeftAlone(r)
+        self.assertEqual(self.read("data/modem.orig"), saved)
+
+    def test_unanswered_sa_read_fails_the_setup(self):
+        r = self.setup("--no-sa", SA="none")
+        self.assertLeftAlone(r)
+        self.assertIn("could not read nr5g_disable_mode", r.stderr)
+        self.assertEqual(self.read("at").splitlines(), SETUP + BEFORE[::-1])
+
+    def setup_external(self, *args, **env):
+        """setup on a modem already in External VoLTE mode with the voice
+        values of setup, as after an earlier setup; the radio cycle is a stub."""
+        p = self.sb / "case.sh"
+        p.write_text(self.base + '\nradio_cycle() { echo cycle >>"$SB/events"; }\ncmd_setup '
+                     + " ".join(args) + "\n", encoding="utf-8", newline="\n")
+        return subprocess.run(SHELL + [str(p)], env={**os.environ, "SB": str(self.sb), **EXTERNAL, **env},
+                              text=True, capture_output=True, timeout=10)
+
+    def test_no_sa_on_external_mode_turns_5g_standalone_off(self):
+        # The likely path of #7: setup ran before, the line does not come up
+        # on a 5G SA network, and setup --no-sa runs again. Only the new value
+        # is written, kept for the restore, and the radio reconnects.
+        r = self.setup_external("--no-sa")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), [NO_SA, "AT+QEFSSYNC=0"])
+        self.assertIn("nr5g_disable_mode=0\n", self.read("data/modem.orig"))
+        ev = self.read("events").splitlines()
+        self.assertIn("cycle", ev)
+        self.assertLess(ev.index("init stop"), ev.index("cycle"))
+
+    def test_refused_sa_off_on_external_mode_fails_the_setup(self):
+        r = self.setup_external("--no-sa", FAIL_AT="nr5g_disable_mode")
+        self.assertLeftAlone(r)
+        self.assertIn("the modem refused " + NO_SA, r.stderr)
+        self.assertEqual(self.read("at").splitlines(), [NO_SA])
+        self.assertFalse((self.sb / "data/modem.orig").exists())  # saved by this run
+        self.assertNotIn("cycle", self.read("events"))
+
+    def test_no_sa_on_external_mode_with_sa_already_off_writes_nothing(self):
+        r = self.setup_external("--no-sa", SA="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.read("at"), "")
+        self.assertNotIn("cycle", self.read("events"))
+
     def test_refused_mode_switch_keeps_sleep_settings(self):
         # Review 14.11 (docs): "a failed setup leaves the router as it was",
         # but sleep and auto power-off were off already, on a router that
@@ -735,7 +1024,7 @@ class FailedSetup(unittest.TestCase):
     def test_values_saved_by_an_earlier_setup_stay(self):
         (self.sb / "data").mkdir()
         saved = "ims=0\nvoice_disable=3\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n"
-        (self.sb / "data/modem.orig").write_text(saved)
+        (self.sb / "data/modem.orig").write_text(saved, encoding="utf-8", newline="\n")
         r = self.setup(FAIL_AT="voice_domain")
         self.assertLeftAlone(r)
         self.assertEqual(self.read("data/modem.orig"), saved)
@@ -777,14 +1066,14 @@ class WebPageRuns(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.sb = sb = Path(self.tmp.name)
         (sb / "data").mkdir()
-        (sb / "config").write_text("config voip 'main'\n")
+        (sb / "config").write_text("config voip 'main'\n", encoding="utf-8", newline="\n")
         cli = swap(RawPackageRemoval.cli(self), 'modem_reboot() { echo reboot >>"$SB/events"; }',
                    'modem_reboot() { echo "reboot, state $(cat "$SETUP_STATE")" >>"$SB/events"; }')
         self.executable("cli", cli)
 
     def saved(self):
         (self.sb / "data/modem.orig").write_text(
-            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n")
+            "ims=1\nvoice_disable=2\nmode_pref=AUTO\nvoice_domain=3\nue_usage=0\n", encoding="utf-8", newline="\n")
 
     def background(self, *args, **env):
         """Start a run as the pages do; wait for its end, return its code."""
@@ -839,8 +1128,10 @@ class WebPageRuns(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("unknown option --no-such-option", self.read("setup.log"))
 
+    @unittest.skipIf(WINDOWS, "the pids of Python's processes are Windows pids, which the "
+                     "shell's kill -0 and /proc (MSYS) do not know")
     def test_one_run_at_a_time(self):
-        (self.sb / "setup.state").write_text("running %d\n" % os.getpid())
+        (self.sb / "setup.state").write_text("running %d\n" % os.getpid(), encoding="utf-8", newline="\n")
         r = self.run_sh([str(self.sb / "cli"), "setup", "--detach"], **OWN_VOICE)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("running already", r.stderr)
@@ -848,7 +1139,7 @@ class WebPageRuns(unittest.TestCase):
         # A wrapper that was killed: its process is gone, a new run may start.
         gone = subprocess.Popen(["true"])
         gone.wait()
-        (self.sb / "setup.state").write_text("running %d\n" % gone.pid)
+        (self.sb / "setup.state").write_text("running %d\n" % gone.pid, encoding="utf-8", newline="\n")
         self.assertEqual(self.background("setup", "--detach", **OWN_VOICE), 0)
 
 
@@ -866,17 +1157,17 @@ class FirmwareUpdate(unittest.TestCase):
         return [line for line in text.splitlines() if line and not line.startswith("#")]
 
     def test_the_data_of_the_line_is_kept(self):
-        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text()
+        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text(encoding="utf-8")
         paths = {"/etc/config/mudi-volte"}
         paths.update(re.findall(r"json_add_string \w+ (/etc/\S+)", init))
         paths.add(re.search(r"^DATA=(/\S+)$", SOURCE, re.M).group(1) + "/")
         for go in sorted((ROOT / "src/imsd").glob("*.go")):
             if not go.name.endswith("_test.go"):
                 # GL's SMS spool belongs to GL, whose own rule keeps /etc/spool.
-                paths.update(p for p in re.findall(r'"(/etc/[^"]+)"', go.read_text())
+                paths.update(p for p in re.findall(r'"(/etc/[^"]+)"', go.read_text(encoding="utf-8"))
                              if not p.startswith("/etc/spool/"))
         self.assertGreater(len(paths), 5, paths)
-        kept = self.kept(self.RULE.read_text())
+        kept = self.kept(self.RULE.read_text(encoding="utf-8"))
         for p in sorted(paths):
             self.assertTrue(any(p == k or (k.endswith("/") and p.startswith(k)) for k in kept),
                             "a firmware update loses " + p)
@@ -884,11 +1175,169 @@ class FirmwareUpdate(unittest.TestCase):
     def test_the_rule_survives_its_neighbours(self):
         # A file without a final newline glues its last line to the first line
         # of the next file (luci-base comes before this one, netifd after it).
-        text = self.RULE.read_text()
+        text = self.RULE.read_text(encoding="utf-8")
         joined = "/etc/luci-uploads" + text + "/etc/udhcpc.user.d/\n"
         for p in self.kept(text):
             self.assertIn(p, self.kept(joined))
             self.assertEqual(p, p.strip())  # the update script tests the path as written
+
+
+# The GL AT proxy with two subscriptions: READY lists the slots whose SIM is
+# ready, ESIM=1 makes slot 2 the built-in eSIM. The reply names the
+# subscription the line selected, as the modem does.
+SIM_STUBS = r'''
+DATA=$SB/data
+ORIG=$DATA/modem.orig
+sleep() { :; }
+uci() {
+ echo "uci $*" >>"$SB/events"
+ case "$*" in
+ *get*mudi-volte.main.sim_slot*) cat "$SB/sim_slot" 2>/dev/null ;;
+ esac
+}
+ubus() {
+ json=$4
+ echo "$json" >>"$SB/ubus"
+ cmd=$(printf '%s' "$json" | sed -n 's/^{"cmd":"\(.*\)","timeout":12,"sub_id":[0-9]*}$/\1/p' | sed 's/\\"/"/g')
+ # A line with AT+QUIMSUB=N selects N; a bare command runs in the last one.
+ sub=$(printf '%s' "$cmd" | sed -n 's/^AT+QUIMSUB=\([12]\)\(;.*\)*$/\1/p')
+ if [ -n "$sub" ]; then echo "$sub" >"$SB/cursub"; else sub=$(cat "$SB/cursub" 2>/dev/null); fi
+ case "$cmd" in
+ *CPIN?*)
+  case " ${READY:-} " in
+  *" $sub "*) data="+QUIMSUB: $sub,\"SUB$sub\"\n+CPIN: READY\n\nOK" ;;
+  *) data="+QUIMSUB: $sub,\"SUB$sub\"\n+CME ERROR: 10" ;;
+  esac ;;
+ *QSIMTYPE*) data="+QUIMSUB: $sub,\"SUB$sub\"\n+QSIMTYPE: \"slot2\",${ESIM:-0}\n\nOK" ;;
+ *) data="+QUIMSUB: $sub,\"SUB$sub\"\n\nOK" ;;
+ esac
+ printf '{"data":"%s"}\n' "$data"
+}
+jsonfilter() { sed -n 's/^{"data":"\(.*\)"}$/\1/p' | sed 's/\\n/\n/g; s/\\"/"/g'; }
+'''
+
+
+class SimSlot(unittest.TestCase):
+    """pick_sim and the AT primitives with the line on SIM 1, SIM 2 or the eSIM."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="mudi-sim-")
+        self.addCleanup(self.tmp.cleanup)
+        self.sb = Path(self.tmp.name)
+        (self.sb / "data").mkdir()
+        self.base = SOURCE + "\n" + SIM_STUBS
+
+    def run_case(self, command, **env):
+        p = self.sb / "case.sh"
+        p.write_text(self.base + "\n" + command + "\n", newline="\n", encoding="utf-8")
+        return subprocess.run(SHELL + [str(p)], env={**os.environ, "SB": str(self.sb), **env},
+                              text=True, capture_output=True, timeout=20)
+
+    def lines(self):
+        p = self.sb / "ubus"
+        return p.read_text(encoding="utf-8").splitlines() if p.exists() else []
+
+    def test_slot_1_first(self):
+        r = self.run_case('pick_sim; echo "slot $SIM"', READY="1 2")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("slot 1", r.stdout)
+
+    def test_esim_alone_is_picked_and_every_line_selects_it(self):
+        r = self.run_case('pick_sim; echo "slot $SIM"; sim_label; echo; at_set \'AT+QCFG="ims",2\'',
+                          READY="2", ESIM="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("slot 2", r.stdout)
+        self.assertIn("eSIM", r.stdout)
+        after = self.lines()[next(i for i, l in enumerate(self.lines()) if 'QUIMSUB=2' in l):]
+        self.assertTrue(after)
+        for l in after:
+            self.assertIn('"sub_id":2', l)
+            self.assertIn("QUIMSUB=2", l)
+        self.assertTrue(any('QCFG=\\"ims\\",2' in l for l in after), after)
+
+    def test_slot_set_in_the_config_is_kept(self):
+        (self.sb / "sim_slot").write_text("2\n", encoding="utf-8", newline="\n")
+        r = self.run_case('pick_sim; echo "slot $SIM"', READY="1 2")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("slot 2", r.stdout)
+        self.assertFalse(any("QUIMSUB=1" in l for l in self.lines()))
+
+    def test_configured_slot_without_a_ready_sim_fails(self):
+        (self.sb / "sim_slot").write_text("2\n", encoding="utf-8", newline="\n")
+        r = self.run_case('pick_sim; echo "slot $SIM"', READY="1")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("no SIM ready in slot 2", r.stderr)
+
+    def test_earlier_setup_stays_on_slot_1(self):
+        # Installed before the slot became a setting: the modem was switched
+        # in SUB1, and a restore has to go there too.
+        (self.sb / "data/modem.orig").write_text("ims=1\n", encoding="utf-8", newline="\n")
+        r = self.run_case('pick_sim; echo "slot $SIM"', READY="1 2")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("slot 1", r.stdout)
+
+    def test_no_ready_sim(self):
+        r = self.run_case('pick_sim', READY="")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("no SIM ready in slot 1 or slot 2", r.stderr)
+
+
+def opkg_verrevcmp(val, ref):
+    """opkg's version comparison (libopkg/pkg.c of opkg-lede, from dpkg):
+    '~' before anything, even the end; letters before the other characters;
+    runs of digits compared as numbers."""
+    def order(c):
+        if c == "~":
+            return -1
+        if not c or c.isdigit():
+            return 0
+        if c.isalpha():
+            return ord(c)
+        return ord(c) + 256
+    i = j = 0
+    while i < len(val) or j < len(ref):
+        while (i < len(val) and not val[i].isdigit()) or (j < len(ref) and not ref[j].isdigit()):
+            vc = order(val[i] if i < len(val) else "")
+            rc = order(ref[j] if j < len(ref) else "")
+            if vc != rc:
+                return vc - rc
+            i += 1
+            j += 1
+        m = re.match(r"\d*", val[i:]).group()
+        n = re.match(r"\d*", ref[j:]).group()
+        i += len(m)
+        j += len(n)
+        if int(m or 0) != int(n or 0):
+            return int(m or 0) - int(n or 0)
+    return 0
+
+
+class Version(unittest.TestCase):
+    """The fork's version: the upstream version it builds on plus a fourth
+    number (CHANGELOG.md)."""
+
+    def test_digits_and_dots_only(self):
+        # The same string is the opkg version, part of the file names, the git
+        # tag (no '~') and the release assets' names (GitHub renames special
+        # characters); build.sh puts it into sed replacements and install.sh
+        # into a grep pattern.
+        self.assertRegex(VERSION, r"^\d+\.\d+\.\d+\.\d+$")
+
+    def test_sorts_between_its_upstream_version_and_the_next(self):
+        major, minor, patch, _ = (int(x) for x in VERSION.split("."))
+        upstream = "%d.%d.%d" % (major, minor, patch)
+        self.assertGreater(opkg_verrevcmp(VERSION, upstream), 0)
+        for later in ("%d.%d.%d" % (major, minor, patch + 1), "%d.%d.0" % (major, minor + 1)):
+            self.assertLess(opkg_verrevcmp(VERSION, later), 0, later)
+            # The fork's release on top of a later upstream one is newer again.
+            self.assertGreater(opkg_verrevcmp(later + ".1", later), 0, later)
+
+    def test_comparison_as_opkg(self):
+        self.assertEqual(opkg_verrevcmp("0.2.0", "0.2.0"), 0)
+        self.assertLess(opkg_verrevcmp("0.2.0~cl1", "0.2.0"), 0)  # '~' sorts first
+        self.assertGreater(opkg_verrevcmp("0.2.0+cl1", "0.2.0"), 0)
+        self.assertLess(opkg_verrevcmp("0.2.0.9", "0.2.0.10"), 0)  # numbers, not text
+        self.assertLess(opkg_verrevcmp("0.9", "0.10"), 0)
 
 
 if __name__ == "__main__":

@@ -52,13 +52,22 @@ type netStack struct {
 	onEvent func(c *netCall, s CallState)
 }
 
-// availableCodecs returns what we can do on the network: AMR-WB only when the
-// codec is linked in (cgo build with media/amrwb), otherwise G.711.
+// availableCodecs returns what we can do on the network, best first: AMR-WB
+// and AMR only when their codec is linked in (cgo build with media/amrwb and
+// media/amrnb), then G.711.
 func availableCodecs() []string {
-	if media.NewAMRWBCoder != nil {
-		return []string{"AMR-WB", "PCMA", "PCMU"}
+	return linkedCodecs(media.NewAMRWBCoder != nil, media.NewAMRNBCoder != nil)
+}
+
+func linkedCodecs(amrwb, amrnb bool) []string {
+	var out []string
+	if amrwb {
+		out = append(out, "AMR-WB")
 	}
-	return []string{"PCMA", "PCMU"}
+	if amrnb {
+		out = append(out, "AMR")
+	}
+	return append(out, "PCMA", "PCMU")
 }
 
 func newNetStack(iface string, rc reg.Config, auth volsim.Authenticator, cc call.Config, sc sms.Config, log *slog.Logger) (*netStack, error) {
@@ -159,15 +168,16 @@ func (st *netStack) bindRTP() (*net.UDPConn, error) {
 }
 
 // Dial places an outgoing call to the network; it returns on answer, failure
-// or cancellation of ctx.
-func (st *netStack) Dial(ctx context.Context, to string) (imsCall, error) {
+// or cancellation of ctx. requestURI other than "" addresses the INVITE to it,
+// with to in the To header.
+func (st *netStack) Dial(ctx context.Context, to, requestURI string) (imsCall, error) {
 	rtp, err := st.bindRTP()
 	if err != nil {
 		return nil, err
 	}
 	local := rtp.LocalAddr().(*net.UDPAddr).AddrPort()
 	var nc *netCall
-	c, err := st.calls.DialWith(to, local, func(c *call.Call) {
+	c, err := st.calls.DialURI(requestURI, to, local, func(c *call.Call) {
 		nc = newNetCall(st, c, CallOutgoing)
 		nc.rtp = rtp
 		st.remember(nc)

@@ -158,8 +158,12 @@ type Negotiated struct {
 	Ptime  int
 }
 
-// DefaultCodecs is our preference: wideband first, G.711 as a fallback.
-var DefaultCodecs = []string{"AMR-WB", "PCMA", "PCMU"}
+// DefaultCodecs is our preference: wideband first, then AMR (narrowband,
+// mandatory for a VoLTE UE per GSMA IR.92 and what interconnects to 2G/3G
+// and other networks often offer without G.711), G.711 as a fallback. This
+// order is the one of our offers; in an answer the offerer's order wins (see
+// Negotiate), so an offer listing AMR before G.711 is answered with AMR.
+var DefaultCodecs = []string{"AMR-WB", "AMR", "PCMA", "PCMU"}
 
 // Negotiate picks the codec for an answer: the first offered format we
 // support, keeping the offerer's order (RFC 3264 §6.1).
@@ -252,6 +256,10 @@ func bandwidthAS(fs []Format) int {
 	switch strings.ToUpper(fs[0].Name) {
 	case "AMR-WB":
 		return 38
+	case "AMR":
+		// 12.2 kbit/s octet-aligned: 1 + 1 + 31 = 33 bytes of payload, plus
+		// 40 bytes of IPv4/UDP/RTP, 50 packets a second: 29.2 kbit/s.
+		return 30
 	case "PCMA", "PCMU":
 		return 80
 	}
@@ -273,11 +281,14 @@ func (n Negotiated) Answer(local netip.AddrPort, id, version uint64, offerDirect
 }
 
 // OfferFormats is what we put in our own offers (TS 26.114 §6.2.2: AMR-WB
-// bandwidth-efficient with mode changes allowed, plus telephone-event),
-// limited to codecs (nil = all) in their order of preference.
+// and AMR bandwidth-efficient with mode changes allowed and no mode-set, so
+// any mode may be used, plus telephone-event), limited to codecs (nil = all)
+// in their order of preference. The AMR line has the same fmtp as the one
+// the tested network itself offers for AMR (call/testdata/live_offer.sdp).
 func OfferFormats(codecs []string) []Format {
 	all := []Format{
 		{PT: 104, Name: "AMR-WB", ClockRate: 16000, Fmtp: "mode-change-capability=2;max-red=0"},
+		{PT: 102, Name: "AMR", ClockRate: 8000, Fmtp: "mode-change-capability=2;max-red=0"},
 		{PT: 8, Name: "PCMA", ClockRate: 8000},
 		{PT: 0, Name: "PCMU", ClockRate: 8000},
 		{PT: 105, Name: "telephone-event", ClockRate: 16000, Fmtp: "0-15"},

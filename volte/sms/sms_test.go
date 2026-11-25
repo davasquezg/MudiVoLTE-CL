@@ -50,6 +50,23 @@ func TestSubmitSeptetPacking(t *testing.T) {
 	}
 }
 
+// SeptetLen follows the default alphabet and its extension table
+// (TS 23.038 §6.2.1): ñ, é, ¿, ¡ and ü are there, á, í, ó and ú are not.
+func TestSeptetLen(t *testing.T) {
+	for _, tc := range []struct {
+		r    rune
+		want int
+	}{
+		{'a', 1}, {'@', 1}, {'\n', 1}, {'ñ', 1}, {'Ñ', 1}, {'é', 1}, {'É', 1}, {'¿', 1}, {'¡', 1},
+		{'ü', 1}, {'Ü', 1}, {'à', 1}, {'Δ', 1}, {'€', 2}, {'[', 2}, {'~', 2}, {'\\', 2}, {'|', 2},
+		{'^', 2}, {'{', 2}, {'á', 0}, {'í', 0}, {'ó', 0}, {'ú', 0}, {'`', 0}, {'😀', 0}, {0x1b, 0},
+	} {
+		if got := SeptetLen(tc.r); got != tc.want {
+			t.Errorf("SeptetLen(%q) = %d, want %d", tc.r, got, tc.want)
+		}
+	}
+}
+
 // deliverFromSubmit turns our SMS-SUBMIT into the SMS-DELIVER the recipient
 // would get: same DCS and user data, originator instead of destination.
 func deliverFromSubmit(t *testing.T, sub []byte, from Address) []byte {

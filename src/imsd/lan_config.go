@@ -31,10 +31,20 @@ type SIPConfig struct {
 	RTPPortMax     int          `json:"rtp_port_max"`    // 40199
 	Codecs         []string     `json:"codecs"`          // order of preference: G722, PCMU, PCMA
 	RingSec        int          `json:"ring_sec"`        // how long to ring the phones, s
-	DialAllow      []string     `json:"dial_allow"`      // allowed outgoing prefixes (+44, +33…); "*" = any; empty = no outgoing calls
-	DefaultCountry string       `json:"default_country"` // country code for numbers with a leading 0 ("44")
+	DialAllow      []string     `json:"dial_allow"`      // allowed outgoing E.164 prefixes (+44, +33…) or short numbers; "*" = any; empty = no outgoing calls
+	DefaultCountry string       `json:"default_country"` // country code for numbers with a leading 0 ("44") or of national length ("56")
 	EchoExt        string       `json:"echo_ext"`        // echo test number ("600"); empty = off
 	JitterFrames   int          `json:"jitter_frames"`   // jitter prebuffer, in 20 ms frames
+	// Number plan (numbers.go). NationalLen: the digits of a national number
+	// dialled without a trunk 0, which gets "+" and default_country (9 for
+	// Chile); 0 = the country's default, -1 = off. Emergency: the emergency
+	// numbers ("133", or "133=police" for urn:service:sos.police), always
+	// allowed whatever dial_allow says; empty = the country's default.
+	// EmergencyURN: address them to urn:service:sos… (RFC 5031) instead of
+	// tel:<digits>; whether the operator takes that is to verify with it.
+	NationalLen  int      `json:"national_len"`
+	Emergency    []string `json:"emergency"`
+	EmergencyURN bool     `json:"emergency_urn"`
 	// Phone setup by QR code (provision.go): the HTTP port on the LAN address,
 	// 0 = off; the directory of the one-time links, empty =
 	// /var/run/mudi-volte/links.
@@ -194,6 +204,52 @@ func (c SIPConfig) validate() error {
 	}
 	if c.DefaultCountry != "" && digitsOnly(c.DefaultCountry) != c.DefaultCountry {
 		return fmt.Errorf("sip.default_country %q: the digits of the country code only", c.DefaultCountry)
+	}
+	switch {
+	case c.NationalLen < -1:
+		return fmt.Errorf("sip.national_len %d: a number of digits, 0 (the country's default) or -1 (off)", c.NationalLen)
+	case c.NationalLen > 0 && c.DefaultCountry == "":
+		return errors.New("sip.national_len needs sip.default_country")
+	case c.NationalLen > 0 && (c.NationalLen < 4 || len(c.DefaultCountry)+c.NationalLen > 15):
+		return fmt.Errorf("sip.national_len %d: 4 digits or more, and at most 15 with the country code", c.NationalLen)
+	}
+	// The effective list: the explicit one or the country's, so that neither
+	// can be taken by a phone or the echo test.
+	emergency, field := c.Emergency, "sip.emergency"
+	if len(emergency) == 0 {
+		emergency, field = countryEmergency[c.DefaultCountry], "emergency number of country "+c.DefaultCountry
+	}
+	for _, e := range emergency {
+		if err := validEmergency(strings.TrimSpace(e), c); err != nil {
+			return fmt.Errorf("%s: %v", field, err)
+		}
+	}
+	return nil
+}
+
+// validEmergency checks an emergency number entry: 2–8 digits, optionally
+// "=kind" with an RFC 5031 sub-service (police, fire, ambulance…: lower-case
+// letters and "-"); it must not be a phone's short number or login or the
+// echo test, which would keep the call inside the home (lan_server.go routes
+// those first).
+func validEmergency(e string, c SIPConfig) error {
+	num, kind, hasKind := strings.Cut(e, "=")
+	if len(num) < 2 || len(num) > 8 || digitsOnly(num) != num {
+		return fmt.Errorf("%q: 2 to 8 digits are needed", e)
+	}
+	if hasKind && (kind == "" || strings.Trim(kind, "abcdefghijklmnopqrstuvwxyz-") != "") {
+		return fmt.Errorf("%q: after = a service such as police, fire or ambulance (RFC 5031)", e)
+	}
+	if num == c.EchoExt {
+		return fmt.Errorf("%q is taken by the echo test", e)
+	}
+	for _, a := range c.Accounts {
+		if a.Ext == num {
+			return fmt.Errorf("%q is the short number of phone %q", e, a.User)
+		}
+		if a.User == num {
+			return fmt.Errorf("%q is the login of a phone", e)
+		}
 	}
 	return nil
 }

@@ -276,7 +276,7 @@ func (m *callManager) incomingFromNetwork(call imsCall, from string) {
 			m.logger.Error("incoming: reject", "code", code, "err", err)
 		}
 	}
-	if !m.cfg.IncomingAll && !numberAllowed(m.cfg.Allow, from) {
+	if !m.cfg.IncomingAll && !numberAllowed(m.cfg.Allow, from, m.sip.plan()) {
 		m.logger.Info("incoming: declined (caller not allowed)", "from", masked)
 		reject(rejectDecline, "Decline")
 		m.missed.add(from, missedNotAllowed)
@@ -516,12 +516,26 @@ func (m *callManager) outgoingCall(req *sip.Request, tx sip.ServerTransaction, u
 		l.respond(req, tx, 503, "No Network (sip-test)")
 		return
 	}
-	num, err := normalizeDialed(target, m.sip.DefaultCountry)
+	np := m.sip.plan()
+	num, err := normalizeDialed(target, np)
 	if err != nil {
 		l.respond(req, tx, 484, "Address Incomplete")
 		return
 	}
-	if !dialAllowed(m.sip.DialAllow, num) {
+	// An emergency number of the country is never held back by 'dial'. It goes
+	// out as dialled, in an ordinary INVITE to tel:<digits> that the network
+	// may recognise as an emergency (TS 24.229 §5.1.6: an emergency the UE
+	// did not detect); sip.emergency_urn addresses it to urn:service:sos…
+	// (RFC 5031) instead, the dialled number staying in To. Neither is an IMS
+	// emergency call: there is no emergency registration or PDN. Whether the
+	// operator routes either kind is to verify with the operator.
+	requestURI := ""
+	if svc := np.emergencyFor(num); svc != "" {
+		if m.sip.EmergencyURN {
+			requestURI = "urn:service:" + svc
+		}
+		m.logger.Warn("outgoing: EMERGENCY number, placed as an ordinary call (not an IMS emergency call)", "user", user, "to", num, "request_uri", requestURI)
+	} else if !dialAllowed(m.sip.DialAllow, num) {
 		m.logger.Warn("outgoing: destination not allowed", "user", user, "to", maskNumber(num))
 		l.respond(req, tx, 403, "Destination Not Allowed")
 		return
@@ -559,7 +573,7 @@ func (m *callManager) outgoingCall(req *sip.Request, tx sip.ServerTransaction, u
 	defer dialCancel()
 	resCh := make(chan dialResult, 1)
 	go func() {
-		c, err := m.dialer.Dial(dialCtx, num)
+		c, err := m.dialer.Dial(dialCtx, num, requestURI)
 		resCh <- dialResult{call: c, err: err}
 	}()
 	ringing := lc.ringing

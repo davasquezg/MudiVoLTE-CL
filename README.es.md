@@ -2,6 +2,11 @@
 
 # MudiVoLTE: llamadas y SMS en el GL.iNet Mudi 7
 
+> Este es un fork de [xarvel/MudiVoLTE](https://github.com/xarvel/MudiVoLTE) adaptado para Chile
+> (eSIM, numeración chilena, español). Sus paquetes y su instalador vienen de
+> las [versiones publicadas de este fork](https://github.com/davasquezg/MudiVoLTE-CL/releases); reporta los
+> problemas con ellos en [sus issues](https://github.com/davasquezg/MudiVoLTE-CL/issues).
+
 El GL.iNet Mudi 7 (GL-E5800) tiene un módem 5G, el Quectel RG650V, que
 oficialmente solo hace datos: las llamadas a su SIM no llegan a ninguna parte.
 MudiVoLTE convierte el router en una línea telefónica para esa SIM. Los teléfonos
@@ -27,8 +32,15 @@ configuración), el registro y una llamada entrante contestada en un iPhone
 despertado por una notificación push.
 
 > **Antes de empezar.** No se garantiza que los números de emergencia (112, 911,
-> 999 y similares) funcionen a través de MudiVoLTE: mantén un teléfono con su
-> propia SIM para ellos. Ejecutar el cliente IMS del operador en un router puede
+> 999 y similares; en Chile, 131 ambulancia del SAMU, 132 Bomberos, 133
+> Carabineros, 134 PDI, 136 Cuerpo de Socorro Andino, 137 búsqueda y salvamento
+> marítimo y 138 rescate aéreo, una lista aún no contrastada con una fuente
+> oficial chilena) funcionen a través de MudiVoLTE: mantén un teléfono con su
+> propia SIM para ellos. MudiVoLTE los deja pasar diga lo que diga `dial` (en
+> Chile con `country` 56, que la configuración inicial completa desde una SIM
+> chilena), pero los marca como una llamada común, no como una llamada de
+> emergencia IMS (ver [package/README.es.md](package/README.es.md#números)).
+> Ejecutar el cliente IMS del operador en un router puede
 > ir en contra de las condiciones de tu contrato móvil; revísalas. MudiVoLTE es
 > un proyecto personal, probado con un solo operador, y se entrega sin ninguna
 > garantía (ver [LICENSE](LICENSE)).
@@ -36,11 +48,14 @@ despertado por una notificación push.
 ## Lo que necesitas
 
 - Un GL.iNet Mudi 7 (GL-E5800) con firmware GL 4.x.
-- Una SIM en la ranura 1 de un operador que ofrezca VoLTE para ella. Probado con
-  un operador europeo. Otros deberían funcionar si permiten VoLTE para la SIM;
-  abre un issue y cuenta cómo te fue. Una segunda SIM o la eSIM integrada pueden
-  quedarse en el router, pero la línea telefónica es siempre la SIM de la
-  ranura 1 (ver [Limitaciones conocidas](#limitaciones-conocidas)).
+- Una SIM de un operador que ofrezca VoLTE para ella: la nano-SIM de la ranura
+  1, o la de la ranura 2 o la eSIM integrada (que ocupa el lugar de la SIM 2). La
+  configuración elige la primera ranura con una SIM lista, primero la 1;
+  `mudi-volte.main.sim_slot` elige otra. Probado con un operador europeo en la
+  SIM 1; la línea en la SIM 2 o en la eSIM aún no se ha probado en un router.
+  Otros operadores deberían funcionar si permiten VoLTE para la SIM; abre un
+  issue y cuenta cómo te fue. La otra SIM puede quedarse en el router (ver
+  [Limitaciones conocidas](#limitaciones-conocidas)).
 - Un teléfono, tablet o computador con Linphone (gratuito: Android, iPhone,
   macOS, Windows, Linux).
 - Opcionalmente: una cuenta gratuita en
@@ -66,7 +81,7 @@ su panel web.
 **2. Ejecuta el instalador.**
 
 ```sh
-wget -qO- https://github.com/xarvel/MudiVoLTE/releases/latest/download/install.sh | sh
+wget -qO- https://github.com/davasquezg/MudiVoLTE-CL/releases/latest/download/install.sh | sh
 ```
 
 **En español.** Si la versión publicada trae el paquete de traducción
@@ -76,11 +91,21 @@ la configuración, la línea de comandos y la página del panel de administraci�
 de GL quedan en español:
 
 ```sh
-wget -qO- https://github.com/xarvel/MudiVoLTE/releases/latest/download/install.sh | MUDI_VOLTE_LANG=es sh
+wget -qO- https://github.com/davasquezg/MudiVoLTE-CL/releases/latest/download/install.sh | MUDI_VOLTE_LANG=es sh
 ```
 
 LuCI y la pantalla del router siguen su propio ajuste de idioma. Detalles en
 [package/README.es.md](package/README.es.md#idiomas).
+
+> **Requiere una versión publicada de este fork.** El paquete en español solo
+> viene en las versiones del fork. Las del proyecto original no traen
+> paquetes de traducción, y su instalador ignora `MUDI_VOLTE_LANG` e instala
+> en inglés; una versión del fork sin el catálogo pedido termina con *"no
+> translation for language es in this release"*. Mientras el fork no publique
+> su primera versión en su
+> [página de versiones](https://github.com/davasquezg/MudiVoLTE-CL/releases),
+> los comandos de arriba no encuentran el `install.sh`; hasta entonces, el
+> paquete se puede construir a mano (ver [Compilar desde el código fuente](#compilar-desde-el-código-fuente)).
 
 El instalador comprueba que el router sea un Mudi 7, descarga el paquete,
 verifica su checksum, lo instala e inicia la configuración. La configuración
@@ -113,7 +138,7 @@ el estado de la línea:
 ```
 # mudi-volte status
 Service: online, registered for 2m0s
-Number:  +447700900000
+Number:  +569XXXXXXXX
 Network: LTE, IMS on rmnet_data1 (198.51.100.207), P-CSCF 192.0.2.28, 192.0.2.20
 Phones:  phone
 Modem:   External VoLTE mode
@@ -125,7 +150,7 @@ Eso es todo. El servicio se inicia por sí solo cada vez que arranca el router.
 
 **Sin internet en el router.** En un computador, descarga `install.sh` y
 `mudi-volte_<version>_aarch64_cortex-a53.ipk` desde la
-[página de releases](https://github.com/xarvel/MudiVoLTE/releases). Copia ambos
+[página de releases](https://github.com/davasquezg/MudiVoLTE-CL/releases). Copia ambos
 al router, inicia sesión y ejecuta el instalador con el archivo del paquete:
 
 ```sh
@@ -209,7 +234,7 @@ mensaje al `600` vuelve de inmediato: así se prueba el chat sin la red móvil.
 - Un teléfono que no está conectado recibe el SMS cuando se vuelve a conectar
   (dentro de 7 días). Los SMS que estaban en el router antes de MudiVoLTE se
   quedan ahí.
-- Solo los SMS a la SIM de la ranura 1 llegan a los teléfonos. Lo que recibe una
+- Solo los SMS a la SIM de la línea llegan a los teléfonos. Lo que recibe una
   segunda SIM se queda en la página SMS del panel de administración de GL.
 - Linphone marca un mensaje como enviado cuando el módem ha enviado el SMS, y
   como fallido cuando no pudo. Si el envío tarda más de 20 segundos, el mensaje
@@ -272,11 +297,15 @@ vacía. La configuración está en `/etc/config/mudi-volte`. Cámbiala en la pá
 web, o con `uci` seguido de `mudi-volte restart`:
 
 ```sh
-# Hacer sonar los teléfonos solo para estos llamantes, rechazar a todos los demás:
+# Hacer sonar los teléfonos solo para estos llamantes, rechazar a todos los demás
+# (cambia las X por el número completo):
 uci set mudi-volte.main.incoming=allow
-uci add_list mudi-volte.main.allow='+447700900123'
-# Llamadas salientes solo al Reino Unido y Francia (el valor por defecto '*' permite cualquier número):
-uci set mudi-volte.main.dial='+44 +33'
+uci add_list mudi-volte.main.allow='+569XXXXXXXX'
+# Llamadas salientes solo a Chile y Argentina (el valor por defecto '*' permite cualquier número):
+uci set mudi-volte.main.dial='+56 +54'
+# O, en Chile, solo dentro de Chile: 'dial' compara con el formato internacional,
+# y 912345678 marcado en un teléfono cuenta como +56912345678 (país 56):
+# uci set mudi-volte.main.dial='+56'
 uci commit mudi-volte && mudi-volte restart
 ```
 
@@ -346,7 +375,7 @@ por defecto en la actualización en línea), y luego ejecuta el instalador de
 nuevo:
 
 ```sh
-wget -qO- https://github.com/xarvel/MudiVoLTE/releases/latest/download/install.sh | sh
+wget -qO- https://github.com/davasquezg/MudiVoLTE-CL/releases/latest/download/install.sh | sh
 ```
 
 Keep Settings conserva `/etc/config/mudi-volte` y `/etc/mudi-volte`, así que el
@@ -488,18 +517,30 @@ de redes móviles, puede pasar por un relay, con más retardo.
 
 - Una llamada a la vez, incluida una llamada entre teléfonos. Una segunda
   llamada entrante recibe "ocupado".
-- Una línea telefónica: la SIM de la ranura 1. Una segunda SIM o la eSIM pueden
-  estar activas al mismo tiempo, pero sus llamadas no llegan a los teléfonos.
-  Mantén internet en la SIM 1: si lo cambias a la otra SIM (SIM Card Switch en
+- Una línea telefónica: la SIM de `sim_slot` (1, o 2 para la ranura 2 o la
+  eSIM). La otra SIM puede estar activa al mismo tiempo, pero sus llamadas no
+  llegan a los teléfonos. Para pasar la línea a la otra SIM:
+  `mudi-volte modem builtin`, luego
+  `uci set mudi-volte.main.sim_slot=2; uci commit mudi-volte` y
+  `mudi-volte setup`. Mantén internet en la SIM de la línea: si lo cambias a la otra SIM (SIM Card Switch en
   el panel de administración de GL), la línea sigue activa pero las llamadas
   tienen cortes breves (en una prueba, 0,25-0,4 s aproximadamente cada 2,4 s),
   probablemente porque el módem comparte su radio entre las SIM. El cambio
   automático (SIM Failover) no se ha probado.
 - Sin voz sobre 5G standalone (VoNR). La línea necesita LTE; 5G NSA sirve, ya
-  que las llamadas van por su ancla LTE. En una red con 5G SA la línea no se
-  levanta: desactiva SA en el módem con `AT+QNWPREFCFG="nr5g_disable_mode",1`
-  (la herramienta AT Command del panel de administración de GL, SIM 1). No
-  tenemos una red así para probarlo.
+  que las llamadas van por su ancla LTE. Cuando el módem está en 5G SA, el
+  daemon ahora lee la celda NR y aun así intenta registrarse (si no puede leer
+  la celda, se registra con la última que leyó, o sin ella), pero si la red lo
+  acepta y las llamadas funcionan está por verificar en el router: no tenemos
+  una red así para probarlo. Si la línea no se levanta en SA, desactiva SA:
+  `mudi-volte setup --no-sa` (guarda el valor del módem y la desinstalación lo
+  restaura), o a mano con `AT+QNWPREFCFG="nr5g_disable_mode",1` (la herramienta
+  AT Command del panel de administración de GL, en la SIM de la línea).
+- IMS solo por IPv4. Si la conexión IMS del operador es solo IPv6, o entrega
+  solo direcciones P-CSCF IPv6, la línea no se registra, y `mudi-volte status`
+  lo indica en "Last error" ("IMS over IPv6 is not supported"). Todavía no se
+  sabe qué operadores chilenos usan IPv6 para IMS. Ver
+  [docs/PROTOCOLS.es.md](docs/PROTOCOLS.es.md#ipv6) §2.3.
 - En iPhone, las llamadas entrantes en segundo plano necesitan la cuenta push
   (ver [Teléfonos en segundo plano](#teléfonos-en-segundo-plano)). Los SMS a un
   iPhone siguen llegando solo mientras Linphone está abierto. Un iPhone
@@ -518,8 +559,11 @@ de redes móviles, puede pasar por un relay, con más retardo.
   después (ver [Actualizaciones del firmware GL](#actualizaciones-del-firmware-gl)).
   Hasta entonces el módem se queda en modo External VoLTE y las llamadas no se
   contestan.
-- No se garantiza que las llamadas de emergencia funcionen. Sin video, sin
-  llamadas de conferencia.
+- No se garantiza que las llamadas de emergencia funcionen: un número de
+  emergencia (el 112, o en Chile del 131 al 134 y del 136 al 138) sale como una
+  llamada común a ese número, no como una llamada de emergencia IMS
+  (`urn:service:sos`), y una lista `dial` que no lo incluye lo rechaza. Sin
+  video, sin llamadas de conferencia.
 
 ## Cómo funciona
 
@@ -527,8 +571,14 @@ El RG650V tiene un modo que Quectel llama "External VoLTE Stack": el módem
 desactiva su propio cliente IMS y le entrega la SIM y la conexión IMS del
 operador al host. `mudi-imsd`, el daemon de este paquete, es ese cliente. Se
 autentica con la SIM (IMS AKA), se registra con el operador sobre IPsec,
-contesta y hace llamadas (SIP, AMR-WB y G.711) y las conecta con los teléfonos
-en el Wi-Fi del router (SIP, G.722 y G.711).
+contesta y hace llamadas (SIP, AMR-WB, AMR y G.711) y las conecta con los teléfonos
+en el Wi-Fi del router (SIP, G.722 y G.711). AMR (banda angosta) se usa cuando
+quien llama lo ofrece antes que G.711 y sin AMR-WB, por ejemplo una
+interconexión con otra red; las llamadas que ofrecen AMR antes que PCMU, y que
+hasta ahora se contestaban con PCMU, ahora quedan en AMR. AMR todavía no se ha
+probado en una llamada real (queda por verificar en el router); para volver a
+solo G.711, define en la configuración JSON del daemon la clave de nivel superior
+`"codecs": ["AMR-WB", "PCMA", "PCMU"]`.
 
 ```
  Linphone ──── Wi-Fi: SIP, RTP ────> mudi-imsd ──── IMS: SIP over IPsec, RTP ────> operator
@@ -584,18 +634,21 @@ biblioteca del firmware, TCP keep-alive) se omiten ahí. Las pruebas del propio
 `mudi-dsi-helper` también necesitan Linux.
 
 ```sh
-git clone https://github.com/xarvel/MudiVoLTE
-cd MudiVoLTE
+git clone https://github.com/davasquezg/MudiVoLTE-CL
+cd MudiVoLTE-CL
 scripts/build-static.sh   # la primera ejecución también compila el toolchain; pruebas; build/static/
 package/build.sh          # dist/: el .ipk, install.sh y SHA256SUMS
 ```
 
 `build-static.sh` compila `mudi-imsd` como un binario completamente estático con
-musl y con el códec AMR-WB incluido, y `mudi-dsi-helper` enlazado contra musl de
+musl y con los códecs AMR-WB y AMR incluidos, y `mudi-dsi-helper` enlazado contra musl de
 forma dinámica: tiene que cargar una biblioteca del firmware. Para instalar tu
 propia compilación, copia `dist/install.sh` y el `.ipk` al router como en "Sin
 internet en el router" más arriba. `scripts/build-imsd.sh` es una compilación
-más rápida sin el códec, para desarrollo: su lado de red ofrece solo G.711.
+más rápida sin los códecs, para desarrollo: su lado de red ofrece solo G.711.
+Las versiones publicadas del fork se construyen en GitHub con
+`.github/workflows/release.yml` (ver
+[CONTRIBUTING.es.md](CONTRIBUTING.es.md#versiones-publicadas)).
 
 | Directorio | Contenido |
 |---|---|

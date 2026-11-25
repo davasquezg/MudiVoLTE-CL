@@ -31,7 +31,7 @@ const (
 // NetMedia is the negotiated audio stream of a network call.
 type NetMedia struct {
 	Negotiated  bool
-	Codec       string // AMR-WB | PCMA | PCMU
+	Codec       string // AMR-WB | AMR | PCMA | PCMU
 	PayloadType int
 	ClockRate   int
 	ModeSet     string
@@ -59,8 +59,10 @@ type imsCall interface {
 	SendDTMF(ctx context.Context, digits string) error
 }
 
+// imsDialer places calls to the network. requestURI is the Request-URI when
+// it is not the number itself (an emergency service URN); "" = to.
 type imsDialer interface {
-	Dial(ctx context.Context, to string) (imsCall, error)
+	Dial(ctx context.Context, to, requestURI string) (imsCall, error)
 }
 
 // dialError means the network answered our INVITE with a failure.

@@ -95,6 +95,52 @@ func TestSMSEncodingAndParts(t *testing.T) {
 	}
 }
 
+// Spanish text stays in the GSM alphabet (160 per SMS) as long as it has
+// none of á í ó ú, which the alphabet lacks (TS 23.038 §6.2.1).
+func TestSMSEncodingSpanish(t *testing.T) {
+	for _, tc := range []struct {
+		text     string
+		alphabet string
+		parts    int
+	}{
+		{"año", "UTF-8", 1},
+		{"100€", "UTF-8", 1},
+		{"¡Feliz cumpleaños, Müller! ¿Vienes? Ñuñoa, café, ÉPOCA, pingüino", "UTF-8", 1},
+		{"¿Dónde estás? Mañana a las 9", "UCS", 1}, // ó, á
+		{"canción", "UCS", 1}, // ó
+		{"Ñandú", "UCS", 1},   // ú
+		{"Δ Σ", "UCS", 1},     // in the alphabet, not in ISO-8859-15
+		{"5 ¤", "UCS", 1},
+		{"a\fb", "UCS", 1},
+		{"`", "UCS", 1},
+		{strings.Repeat("ñ", 160), "UTF-8", 1},
+		{strings.Repeat("ñ", 161), "UTF-8", 2},
+		{strings.Repeat("é", 1530), "UTF-8", 10},
+		{strings.Repeat("é", 1531), "UTF-8", 11},
+		{strings.Repeat("€", 80), "UTF-8", 1},
+		{strings.Repeat("€", 81), "UTF-8", 2},
+		// 306 septets, but € would straddle the end of the first part.
+		{strings.Repeat("a", 152) + "€" + strings.Repeat("a", 152), "UTF-8", 3},
+		{strings.Repeat("ó", 70), "UCS", 1},
+		{strings.Repeat("ó", 71), "UCS", 2},
+		// 134 UTF-16 units, but a surrogate pair does not straddle parts: 33 per part.
+		{strings.Repeat("😀", 67), "UCS", 3},
+	} {
+		name := tc.text
+		if len([]rune(name)) > 20 {
+			name = fmt.Sprintf("%d runes %q…", len([]rune(name)), string([]rune(name)[:5]))
+		}
+		if a, b := smsEncoding(tc.text); a != tc.alphabet {
+			t.Errorf("smsEncoding(%s) = %s, want %s", name, a, tc.alphabet)
+		} else if a == "UTF-8" && string(b) != tc.text {
+			t.Errorf("smsEncoding(%s): body %q, want the text unchanged", name, b)
+		}
+		if got := smsParts(tc.text); got != tc.parts {
+			t.Errorf("smsParts(%s) = %d, want %d", name, got, tc.parts)
+		}
+	}
+}
+
 // messageRequest builds a MESSAGE from the phone; callID "" leaves the
 // Call-ID to sipgo.
 func (p *testPhone) messageRequest(srvAddr, target, contentType string, body []byte, callID string) *sip.Request {

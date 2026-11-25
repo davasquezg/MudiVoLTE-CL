@@ -12,9 +12,12 @@ privado.
 ## Reportar una vulnerabilidad
 
 Usa el reporte privado de vulnerabilidades de GitHub: la pestaña **Security** de
-<https://github.com/xarvel/MudiVoLTE>, "Report a vulnerability". Si ese
-formulario no está disponible, abre un issue que diga solo que tienes un reporte
-de seguridad y cómo contactarte; deja los detalles fuera del issue.
+este fork, <https://github.com/davasquezg/MudiVoLTE-CL>, "Report a vulnerability". Si
+ese formulario no está disponible, abre un issue en
+<https://github.com/davasquezg/MudiVoLTE-CL/issues> que diga solo que tienes un
+reporte de seguridad y cómo contactarte; deja los detalles fuera del issue. Una
+falla que también está en el proyecto original, <https://github.com/xarvel/MudiVoLTE>,
+concierne también a su autor: indícalo en el reporte.
 
 Incluye la versión (`mudi-volte version`), el firmware del router,
 lo que necesita un atacante (un lugar en el Wi-Fi, una cuenta de teléfono, la contraseña

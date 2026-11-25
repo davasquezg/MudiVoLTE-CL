@@ -1,47 +1,47 @@
 msgid ""
 msgstr "Content-Type: text/plain; charset=UTF-8\n"
 
-#: usr/lib/oui-httpd/rpc/mudi-volte:299 usr/lib/oui-httpd/rpc/mudi-volte:345 usr/lib/oui-httpd/rpc/mudi-volte:353
+#: usr/lib/oui-httpd/rpc/mudi-volte:303 usr/lib/oui-httpd/rpc/mudi-volte:349 usr/lib/oui-httpd/rpc/mudi-volte:357
 msgid "bad phone name"
 msgstr ""
 
-#: usr/lib/oui-httpd/rpc/mudi-volte:319
+#: usr/lib/oui-httpd/rpc/mudi-volte:323
 msgid "no such phone"
 msgstr ""
 
-#: usr/lib/oui-httpd/rpc/mudi-volte:373 usr/lib/oui-httpd/rpc/mudi-volte:437
+#: usr/lib/oui-httpd/rpc/mudi-volte:377 usr/lib/oui-httpd/rpc/mudi-volte:441
 msgid "no settings"
 msgstr ""
 
-#: usr/lib/oui-httpd/rpc/mudi-volte:377
+#: usr/lib/oui-httpd/rpc/mudi-volte:381
 msgid "Who may call: all or allow"
 msgstr ""
 
-#: usr/lib/oui-httpd/rpc/mudi-volte:384
+#: usr/lib/oui-httpd/rpc/mudi-volte:388
 msgid "Allowed caller %s: a phone number, e.g. +447700900123"
 msgstr ""
 
-#: usr/lib/oui-httpd/rpc/mudi-volte:396
+#: usr/lib/oui-httpd/rpc/mudi-volte:400
 msgid "Outgoing: * or prefixes such as +44 +33"
 msgstr ""
 
-#: usr/lib/oui-httpd/rpc/mudi-volte:402
+#: usr/lib/oui-httpd/rpc/mudi-volte:406
 msgid "Country code: up to 4 digits, e.g. 44"
 msgstr ""
 
-#: usr/lib/oui-httpd/rpc/mudi-volte:406
+#: usr/lib/oui-httpd/rpc/mudi-volte:410
 msgid "Ring time: 10 to 120 seconds"
 msgstr ""
 
-#: usr/lib/oui-httpd/rpc/mudi-volte:447
+#: usr/lib/oui-httpd/rpc/mudi-volte:451
 msgid "Login: the name of the linphone.org account, letters, digits, dots, dashes, underscores or plus"
 msgstr ""
 
-#: usr/lib/oui-httpd/rpc/mudi-volte:451
+#: usr/lib/oui-httpd/rpc/mudi-volte:455
 msgid "Enter the password of the linphone.org account"
 msgstr ""
 
-#: usr/lib/oui-httpd/rpc/mudi-volte:454
+#: usr/lib/oui-httpd/rpc/mudi-volte:458
 msgid "Password: up to 128 characters, no control characters"
 msgstr ""
 
@@ -57,571 +57,611 @@ msgstr ""
 msgid "no terminal to ask \"%s\": run interactively or add -y"
 msgstr ""
 
-#: usr/sbin/mudi-volte:212
+#: usr/sbin/mudi-volte:218
+msgid "no SIM ready in slot %s (mudi-volte.main.sim_slot), or the SIM wants a PIN (unlock it in the GL admin panel first)"
+msgstr ""
+
+#: usr/sbin/mudi-volte:220
+msgid "no SIM ready in slot 1 or slot 2 (the built-in eSIM takes the place of SIM 2), or the SIM wants a PIN (unlock it in the GL admin panel first)"
+msgstr ""
+
+#: usr/sbin/mudi-volte:228
+msgid "eSIM"
+msgstr ""
+
+#: usr/sbin/mudi-volte:233
+msgid "SIM %s"
+msgstr ""
+
+#: usr/sbin/mudi-volte:267
 msgid "the modem does not answer: could not read %s"
 msgstr ""
 
-#: usr/sbin/mudi-volte:216
+#: usr/sbin/mudi-volte:271
 msgid "the modem refused %s"
 msgstr ""
 
-#: usr/sbin/mudi-volte:243
+#: usr/sbin/mudi-volte:299
 msgid "setup stopped: the modem did not take all the settings that calls need; the values written to it are set back, and the service and the router's sleep settings are unchanged"
 msgstr ""
 
-#: usr/sbin/mudi-volte:245
+#: usr/sbin/mudi-volte:301
 msgid "setup stopped: the modem did not take all the settings that calls need, nor all the values from before back; the service and the router's sleep settings are unchanged. When the modem answers, run the setup again, or 'mudi-volte modem builtin' to give it its own VoLTE back"
 msgstr ""
 
-#: usr/sbin/mudi-volte:260
+#: usr/sbin/mudi-volte:316
 msgid "the modem is not back on the network after 90 s"
 msgstr ""
 
-#: usr/sbin/mudi-volte:334
+#: usr/sbin/mudi-volte:402
 msgid "Turning off the router's sleep mode and auto power-off: a phone line has to stay awake."
 msgstr ""
 
-#: usr/sbin/mudi-volte:353
+#: usr/sbin/mudi-volte:421
 msgid "The router's sleep mode settings are back to what they were."
 msgstr ""
 
-#: usr/sbin/mudi-volte:360
+#: usr/sbin/mudi-volte:428
 msgid "mudi-dsi-helper cannot load the firmware's DSI API; reinstall the package or check the firmware"
 msgstr ""
 
-#: usr/sbin/mudi-volte:365
+#: usr/sbin/mudi-volte:433
 msgid "this is not a GL.iNet Mudi 7 (GL-E5800): %s"
 msgstr ""
 
-#: usr/sbin/mudi-volte:367
+#: usr/sbin/mudi-volte:435
 msgid "the GL modem service (ubus modem.CPU.AT) is missing; GL firmware 4.x is required"
 msgstr ""
 
-#: usr/sbin/mudi-volte:371
+#: usr/sbin/mudi-volte:439
 msgid "the modem does not answer as a Quectel RG650V"
 msgstr ""
 
-#: usr/sbin/mudi-volte:375
-msgid "no SIM card in slot 1, or the SIM wants a PIN (unlock it in the GL admin panel first)"
-msgstr ""
-
-#: usr/sbin/mudi-volte:422
+#: usr/sbin/mudi-volte:503
 msgid "Connecting to the operator"
 msgstr ""
 
-#: usr/sbin/mudi-volte:425
+#: usr/sbin/mudi-volte:506
 msgid " done."
 msgstr ""
 
-#: usr/sbin/mudi-volte:432
+#: usr/sbin/mudi-volte:513
 msgid " still not registered."
 msgstr ""
 
-#: usr/sbin/mudi-volte:442 usr/sbin/mudi-volte:570
+#: usr/sbin/mudi-volte:523 usr/sbin/mudi-volte:651
 msgid "phone name: letters, digits, dot, dash and underscore only"
 msgstr ""
 
-#: usr/sbin/mudi-volte:444
+#: usr/sbin/mudi-volte:525
 msgid "phone name: at most 32 characters"
 msgstr ""
 
-#: usr/sbin/mudi-volte:477
+#: usr/sbin/mudi-volte:558
 msgid "short number: 2-6 digits, not starting with 0 or 1, not 911 or 999"
 msgstr ""
 
-#: usr/sbin/mudi-volte:479
+#: usr/sbin/mudi-volte:560
 msgid "short number: 2-6 digits"
 msgstr ""
 
-#: usr/sbin/mudi-volte:480
+#: usr/sbin/mudi-volte:561
 msgid "short number %s is the echo test"
 msgstr ""
 
-#: usr/sbin/mudi-volte:503 usr/sbin/mudi-volte:590 usr/sbin/mudi-volte:672 usr/sbin/mudi-volte:689
+#: usr/sbin/mudi-volte:584 usr/sbin/mudi-volte:671 usr/sbin/mudi-volte:753 usr/sbin/mudi-volte:770
 msgid "no phone named \"%s\""
 msgstr ""
 
-#: usr/sbin/mudi-volte:507
+#: usr/sbin/mudi-volte:588
 msgid "Phone %s: connect it to this router's Wi-Fi (not the guest network) and"
 msgstr ""
 
-#: usr/sbin/mudi-volte:508
+#: usr/sbin/mudi-volte:589
 msgid "install Linphone (free, Android and iPhone)."
 msgstr ""
 
-#: usr/sbin/mudi-volte:511
+#: usr/sbin/mudi-volte:592
 msgid "Easiest: in Linphone choose \"Scan QR code\" (in the assistant at first start,"
 msgstr ""
 
-#: usr/sbin/mudi-volte:512
+#: usr/sbin/mudi-volte:593
 msgid "or under remote provisioning / \"Fetch remote configuration\") and scan this code."
 msgstr ""
 
-#: usr/sbin/mudi-volte:513
+#: usr/sbin/mudi-volte:594
 msgid "Linphone sets up the account by itself."
 msgstr ""
 
-#: usr/sbin/mudi-volte:517
+#: usr/sbin/mudi-volte:598
 msgid "The same link, to type in instead: %s"
 msgstr ""
 
-#: usr/sbin/mudi-volte:518
+#: usr/sbin/mudi-volte:599
 msgid "It works once, within 15 minutes, and only on this router's network. Do not"
 msgstr ""
 
-#: usr/sbin/mudi-volte:519
+#: usr/sbin/mudi-volte:600
 msgid "share it: it signs a phone in. 'mudi-volte phone show %s' makes a new code."
 msgstr ""
 
-#: usr/sbin/mudi-volte:523
+#: usr/sbin/mudi-volte:604
 msgid "The QR code sets up encrypted calls: SIP over TLS and SRTP audio. A phone set"
 msgstr ""
 
-#: usr/sbin/mudi-volte:524
+#: usr/sbin/mudi-volte:605
 msgid "up before this version calls without encryption until its code is scanned again."
 msgstr ""
 
-#: usr/sbin/mudi-volte:530 usr/sbin/mudi-volte:541
+#: usr/sbin/mudi-volte:611 usr/sbin/mudi-volte:622
 msgid "By hand, in any SIP app (Linphone: Assistant > \"Use a SIP account\"):"
 msgstr ""
 
-#: usr/sbin/mudi-volte:532 usr/sbin/mudi-volte:543
+#: usr/sbin/mudi-volte:613 usr/sbin/mudi-volte:624
 msgid "    Username:   %s"
 msgstr ""
 
-#: usr/sbin/mudi-volte:533 usr/sbin/mudi-volte:544
+#: usr/sbin/mudi-volte:614 usr/sbin/mudi-volte:625
 msgid "    Password:   %s"
 msgstr ""
 
-#: usr/sbin/mudi-volte:534 usr/sbin/mudi-volte:545
+#: usr/sbin/mudi-volte:615 usr/sbin/mudi-volte:626
 msgid "    Domain:     %s"
 msgstr ""
 
-#: usr/sbin/mudi-volte:535
+#: usr/sbin/mudi-volte:616
 msgid "    Transport:  TLS, media encryption SRTP. The router's certificate is"
 msgstr ""
 
-#: usr/sbin/mudi-volte:536
+#: usr/sbin/mudi-volte:617
 msgid "                self-signed, so the app must not check it (Linphone: the QR"
 msgstr ""
 
-#: usr/sbin/mudi-volte:537
+#: usr/sbin/mudi-volte:618
 msgid "                code turns the check off). SIP without encryption is off on"
 msgstr ""
 
-#: usr/sbin/mudi-volte:538
+#: usr/sbin/mudi-volte:619
 msgid "                this router (option plain)."
 msgstr ""
 
-#: usr/sbin/mudi-volte:546
+#: usr/sbin/mudi-volte:627
 msgid "    Transport:  UDP"
 msgstr ""
 
-#: usr/sbin/mudi-volte:549
+#: usr/sbin/mudi-volte:630
 msgid "    Or encrypted: transport TLS, domain %s,"
 msgstr ""
 
-#: usr/sbin/mudi-volte:550
+#: usr/sbin/mudi-volte:631
 msgid "    media encryption SRTP. The router's certificate is self-signed, so the"
 msgstr ""
 
-#: usr/sbin/mudi-volte:551
+#: usr/sbin/mudi-volte:632
 msgid "    app must not check it (Linphone: the QR code turns the check off)."
 msgstr ""
 
-#: usr/sbin/mudi-volte:557
+#: usr/sbin/mudi-volte:638
 msgid "Call 600 to hear yourself: that checks the phone without the mobile network."
 msgstr ""
 
-#: usr/sbin/mudi-volte:559
+#: usr/sbin/mudi-volte:640
 msgid "Other phones on this router call this one by its name, %s, or %s; such calls"
 msgstr ""
 
-#: usr/sbin/mudi-volte:561
+#: usr/sbin/mudi-volte:642
 msgid "Other phones on this router call this one by its name, %s; such calls"
 msgstr ""
 
-#: usr/sbin/mudi-volte:563
+#: usr/sbin/mudi-volte:644
 msgid "stay inside the house and cost nothing."
 msgstr ""
 
-#: usr/sbin/mudi-volte:564
+#: usr/sbin/mudi-volte:645
 msgid "On Android, let Linphone run without battery restrictions, or calls arrive late."
 msgstr ""
 
-#: usr/sbin/mudi-volte:572
+#: usr/sbin/mudi-volte:653
 msgid "phone name: 32 characters at most"
 msgstr ""
 
-#: usr/sbin/mudi-volte:573
+#: usr/sbin/mudi-volte:654
 msgid "a phone named \"%s\" already exists"
 msgstr ""
 
-#: usr/sbin/mudi-volte:591
+#: usr/sbin/mudi-volte:672
 msgid "this router has no display"
 msgstr ""
 
-#: usr/sbin/mudi-volte:592
+#: usr/sbin/mudi-volte:673
 msgid "usage: mudi-volte phone screen NAME [SECONDS]"
 msgstr ""
 
-#: usr/sbin/mudi-volte:595
+#: usr/sbin/mudi-volte:676
 msgid "no connection link for \"%s\": run %s first"
 msgstr ""
 
-#: usr/sbin/mudi-volte:598
+#: usr/sbin/mudi-volte:679
 msgid "Shown on the router's display for %s s, then it closes by itself. A tap closes it early only when the display was already awake (while mudi-volte owns the screen the touch controller does not report to it from sleep)."
 msgstr ""
 
-#: usr/sbin/mudi-volte:663
+#: usr/sbin/mudi-volte:744
 msgid "usage: mudi-volte phone add NAME"
 msgstr ""
 
-#: usr/sbin/mudi-volte:676
+#: usr/sbin/mudi-volte:757
 msgid "Phone \"%s\" removed."
 msgstr ""
 
-#: usr/sbin/mudi-volte:707
+#: usr/sbin/mudi-volte:788
 msgid "usage: mudi-volte phone ext NAME NUMBER (or - to remove)"
 msgstr ""
 
-#: usr/sbin/mudi-volte:714
+#: usr/sbin/mudi-volte:795
 msgid "short number %s belongs to \"%s\""
 msgstr ""
 
-#: usr/sbin/mudi-volte:721
+#: usr/sbin/mudi-volte:802
 msgid "Phone \"%s\" has no short number now; other phones call it by name."
 msgstr ""
 
-#: usr/sbin/mudi-volte:723
+#: usr/sbin/mudi-volte:804
 msgid "Phone \"%s\": short number %s."
 msgstr ""
 
-#: usr/sbin/mudi-volte:726
+#: usr/sbin/mudi-volte:807
 msgid "usage: mudi-volte phone add NAME | del NAME | show NAME | list | url NAME | ext NAME NUMBER | screen NAME [SECONDS]"
 msgstr ""
 
-#: usr/sbin/mudi-volte:752
+#: usr/sbin/mudi-volte:834
 msgid "setup: unknown option %s"
 msgstr ""
 
-#: usr/sbin/mudi-volte:757
+#: usr/sbin/mudi-volte:839
 msgid "Checking the router, the modem and the SIM..."
 msgstr ""
 
-#: usr/sbin/mudi-volte:762
+#: usr/sbin/mudi-volte:844
 msgid "Modem: Quectel RG650V. SIM operator: %s (MCC %s)."
 msgstr ""
 
-#: usr/sbin/mudi-volte:762
+#: usr/sbin/mudi-volte:844
 msgid "unknown"
 msgstr ""
 
-#: usr/sbin/mudi-volte:763
+#: usr/sbin/mudi-volte:845
 msgid "VoLTE through this router needs an operator that offers VoLTE on your SIM."
 msgstr ""
 
-#: usr/sbin/mudi-volte:776
+#: usr/sbin/mudi-volte:846
+msgid "The phone line goes on %s."
+msgstr ""
+
+#: usr/sbin/mudi-volte:858
+msgid "Country calling code: +%s (mudi-volte.main.country)."
+msgstr ""
+
+#: usr/sbin/mudi-volte:863
+msgid "Country calling code: +%s, chosen from the MCC of the SIM (mudi-volte.main.country)."
+msgstr ""
+
+#: usr/sbin/mudi-volte:865
+msgid "No country calling code known for MCC %s: numbers dialled with a leading 0 go out as dialled. To set one: %s"
+msgstr ""
+
+#: usr/sbin/mudi-volte:872
 msgid "The modem is already in External VoLTE mode."
 msgstr ""
 
-#: usr/sbin/mudi-volte:781
+#: usr/sbin/mudi-volte:878
 msgid "Switching the modem to IMS-only voice (no 3G fallback for calls)."
 msgstr ""
 
-#: usr/sbin/mudi-volte:796
+#: usr/sbin/mudi-volte:897
 msgid "Reconnecting the modem to the network (the internet blinks for 10-30 seconds)..."
 msgstr ""
 
-#: usr/sbin/mudi-volte:803
+#: usr/sbin/mudi-volte:904
 msgid "Phone \"%s\" is set up: %s prints its QR code."
 msgstr ""
 
-#: usr/sbin/mudi-volte:808
+#: usr/sbin/mudi-volte:909
 msgid "To handle calls on this router, the modem's own VoLTE client has to be switched"
 msgstr ""
 
-#: usr/sbin/mudi-volte:809
+#: usr/sbin/mudi-volte:910
 msgid "off (\"External VoLTE Stack\" mode). The setting stays in the modem, and"
 msgstr ""
 
-#: usr/sbin/mudi-volte:810
+#: usr/sbin/mudi-volte:911
 msgid "'mudi-volte modem builtin' or 'mudi-volte uninstall' restores it."
 msgstr ""
 
-#: usr/sbin/mudi-volte:811
+#: usr/sbin/mudi-volte:912
 msgid "The router restarts once now: Wi-Fi and the internet are down for 2-3 minutes."
 msgstr ""
 
-#: usr/sbin/mudi-volte:812
+#: usr/sbin/mudi-volte:913
 msgid "Switch the modem and restart the router now?"
 msgstr ""
 
-#: usr/sbin/mudi-volte:812
+#: usr/sbin/mudi-volte:913
 msgid "cancelled; nothing in the modem was changed"
 msgstr ""
 
-#: usr/sbin/mudi-volte:828
+#: usr/sbin/mudi-volte:931
 msgid "Restarting now. Reconnect to the router's Wi-Fi in 2-3 minutes, then connect"
 msgstr ""
 
-#: usr/sbin/mudi-volte:829
+#: usr/sbin/mudi-volte:932
 msgid "your phone by scanning its QR code in Linphone. The code is on the web page"
 msgstr ""
 
-#: usr/sbin/mudi-volte:830
+#: usr/sbin/mudi-volte:933
 msgid "(GL admin panel > System > Advanced Settings > LuCI > Services > Calls & SMS)"
 msgstr ""
 
-#: usr/sbin/mudi-volte:831
+#: usr/sbin/mudi-volte:934
 msgid "or in the terminal:"
 msgstr ""
 
-#: usr/sbin/mudi-volte:835
+#: usr/sbin/mudi-volte:938
 msgid "Is it online? mudi-volte status"
 msgstr ""
 
-#: usr/sbin/mudi-volte:841
+#: usr/sbin/mudi-volte:944
 msgid "Not set up yet: run 'mudi-volte setup'."
 msgstr ""
 
-#: usr/sbin/mudi-volte:847
+#: usr/sbin/mudi-volte:950
 msgid "Modem:   External VoLTE mode"
 msgstr ""
 
-#: usr/sbin/mudi-volte:848
+#: usr/sbin/mudi-volte:951
 msgid "Modem:   not answering"
 msgstr ""
 
-#: usr/sbin/mudi-volte:849
+#: usr/sbin/mudi-volte:952
 msgid "Modem:   built-in VoLTE mode: calls cannot reach this router (run 'mudi-volte setup')"
 msgstr ""
 
-#: usr/sbin/mudi-volte:852
-msgid "Missed:  %s call(s): mudi-volte missed"
-msgstr ""
-
-#: usr/sbin/mudi-volte:854
-msgid "Pushes:  on, account %s (phones: %s)"
-msgstr ""
-
-#: usr/sbin/mudi-volte:866
-msgid "none yet"
-msgstr ""
-
-#: usr/sbin/mudi-volte:881
-msgid "Pushes: on, account %s"
-msgstr ""
-
-#: usr/sbin/mudi-volte:884
-msgid "Pushes: off. An iPhone gets calls only while Linphone is open, an Android phone while its Linphone service runs."
-msgstr ""
-
-#: usr/sbin/mudi-volte:885
-msgid "Turn them on with a free account from subscribe.linphone.org: mudi-volte push login NAME"
-msgstr ""
-
-#: usr/sbin/mudi-volte:892
-msgid "usage: mudi-volte push login NAME (the login of subscribe.linphone.org, without @sip.linphone.org)"
-msgstr ""
-
-#: usr/sbin/mudi-volte:894
-msgid "the password is asked on a terminal (over ssh: ssh -t)"
-msgstr ""
-
-#: usr/sbin/mudi-volte:895
-msgid "Password of %s@sip.linphone.org: "
-msgstr ""
-
-#: usr/sbin/mudi-volte:900
-msgid "empty password, nothing changed"
-msgstr ""
-
-#: usr/sbin/mudi-volte:904
-msgid "could not save the account"
-msgstr ""
-
-#: usr/sbin/mudi-volte:906
-msgid "Pushes on, account %s@sip.linphone.org. Restarting the service (calls are offline for about 10 seconds)..."
-msgstr ""
-
-#: usr/sbin/mudi-volte:913
-msgid "Pushes off. Restarting the service..."
-msgstr ""
-
-#: usr/sbin/mudi-volte:916
-msgid "usage: mudi-volte push [login NAME | off]"
-msgstr ""
-
-#: usr/sbin/mudi-volte:928
-msgid "The list of missed calls is empty."
-msgstr ""
-
-#: usr/sbin/mudi-volte:930
-msgid "usage: mudi-volte missed [clear]"
-msgstr ""
-
-#: usr/sbin/mudi-volte:942
-msgid "usage: mudi-volte sms [--json]"
-msgstr ""
-
-#: usr/sbin/mudi-volte:953
-msgid "IMS mode:      %s (2 = External VoLTE stack, as mudi-volte needs)"
+#: usr/sbin/mudi-volte:954
+msgid "Line:    %s"
 msgstr ""
 
 #: usr/sbin/mudi-volte:956
-msgid "voice_domain:  %s (1 = IMS voice only, as mudi-volte sets)"
-msgstr ""
-
-#: usr/sbin/mudi-volte:957
-msgid "ue_usage:      %s (1 = data centric)"
+msgid "Missed:  %s call(s): mudi-volte missed"
 msgstr ""
 
 #: usr/sbin/mudi-volte:958
-msgid "Saved original: %s"
+msgid "Pushes:  on, account %s (phones: %s)"
 msgstr ""
 
-#: usr/sbin/mudi-volte:969
-msgid "usage: mudi-volte modem [status | builtin]"
+#: usr/sbin/mudi-volte:970
+msgid "none yet"
 msgstr ""
 
-#: usr/sbin/mudi-volte:977
-msgid "could not read %s before restoring it"
+#: usr/sbin/mudi-volte:985
+msgid "Pushes: on, account %s"
 msgstr ""
 
-#: usr/sbin/mudi-volte:981
-msgid "could not restore %s %s"
+#: usr/sbin/mudi-volte:988
+msgid "Pushes: off. An iPhone gets calls only while Linphone is open, an Android phone while its Linphone service runs."
+msgstr ""
+
+#: usr/sbin/mudi-volte:989
+msgid "Turn them on with a free account from subscribe.linphone.org: mudi-volte push login NAME"
+msgstr ""
+
+#: usr/sbin/mudi-volte:996
+msgid "usage: mudi-volte push login NAME (the login of subscribe.linphone.org, without @sip.linphone.org)"
+msgstr ""
+
+#: usr/sbin/mudi-volte:998
+msgid "the password is asked on a terminal (over ssh: ssh -t)"
 msgstr ""
 
 #: usr/sbin/mudi-volte:999
-msgid "the modem is not answering"
+msgid "Password of %s@sip.linphone.org: "
 msgstr ""
 
-#: usr/sbin/mudi-volte:1024
-msgid "the values written so far are set back: the modem stays in External VoLTE mode"
+#: usr/sbin/mudi-volte:1004
+msgid "empty password, nothing changed"
 msgstr ""
 
-#: usr/sbin/mudi-volte:1026
-msgid "could not set them back either: the modem holds some values of each mode until a restore or setup succeeds"
+#: usr/sbin/mudi-volte:1008
+msgid "could not save the account"
 msgstr ""
 
-#: usr/sbin/mudi-volte:1038
-msgid "Restore the modem's own VoLTE and restart the router (2-3 minutes offline)?"
+#: usr/sbin/mudi-volte:1010
+msgid "Pushes on, account %s@sip.linphone.org. Restarting the service (calls are offline for about 10 seconds)..."
 msgstr ""
 
-#: usr/sbin/mudi-volte:1038
-msgid "cancelled"
+#: usr/sbin/mudi-volte:1017
+msgid "Pushes off. Restarting the service..."
 msgstr ""
 
-#: usr/sbin/mudi-volte:1041
-msgid "the modem's own VoLTE is not restored; the service, the package and the settings are kept: retry when the modem answers"
+#: usr/sbin/mudi-volte:1020
+msgid "usage: mudi-volte push [login NAME | off]"
 msgstr ""
 
-#: usr/sbin/mudi-volte:1054
-msgid "The modem has its own VoLTE settings back; they take effect when the router restarts."
+#: usr/sbin/mudi-volte:1032
+msgid "The list of missed calls is empty."
 msgstr ""
 
-#: usr/sbin/mudi-volte:1055
-msgid "Restart the router once the removal is done: until then no calls reach the SIM."
+#: usr/sbin/mudi-volte:1034
+msgid "usage: mudi-volte missed [clear]"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1046
+msgid "usage: mudi-volte sms [--json]"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1057
+msgid "SIM:           %s (mudi-volte.main.sim_slot)"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1058
+msgid "IMS mode:      %s (2 = External VoLTE stack, as mudi-volte needs)"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1061
+msgid "nr5g_disable_mode: %s (1 = 5G standalone off, as setup --no-sa sets)"
 msgstr ""
 
 #: usr/sbin/mudi-volte:1062
-msgid "opkg remove failed; settings kept"
+msgid "voice_domain:  %s (1 = IMS voice only, as mudi-volte sets)"
 msgstr ""
 
 #: usr/sbin/mudi-volte:1063
+msgid "ue_usage:      %s (1 = data centric)"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1064
+msgid "Saved original: %s"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1075
+msgid "usage: mudi-volte modem [status | builtin]"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1083
+msgid "could not read %s before restoring it"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1087
+msgid "could not restore %s %s"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1105
+msgid "the modem is not answering"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1136
+msgid "the values written so far are set back: the modem stays in External VoLTE mode"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1138
+msgid "could not set them back either: the modem holds some values of each mode until a restore or setup succeeds"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1150
+msgid "Restore the modem's own VoLTE and restart the router (2-3 minutes offline)?"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1150
+msgid "cancelled"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1153
+msgid "the modem's own VoLTE is not restored; the service, the package and the settings are kept: retry when the modem answers"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1166
+msgid "The modem has its own VoLTE settings back; they take effect when the router restarts."
+msgstr ""
+
+#: usr/sbin/mudi-volte:1167
+msgid "Restart the router once the removal is done: until then no calls reach the SIM."
+msgstr ""
+
+#: usr/sbin/mudi-volte:1174
+msgid "opkg remove failed; settings kept"
+msgstr ""
+
+#: usr/sbin/mudi-volte:1175
 msgid "Package removed."
 msgstr ""
 
-#: usr/sbin/mudi-volte:1068
+#: usr/sbin/mudi-volte:1180
 msgid "Settings and phones are kept in /etc/config/mudi-volte."
 msgstr ""
 
-#: usr/sbin/mudi-volte:1071
+#: usr/sbin/mudi-volte:1183
 msgid "Settings and phones removed."
 msgstr ""
 
-#: usr/sbin/mudi-volte:1074
+#: usr/sbin/mudi-volte:1186
 msgid "Restarting the router..."
 msgstr ""
 
-#: usr/sbin/mudi-volte:1084
+#: usr/sbin/mudi-volte:1196
 msgid "uninstall: unknown option %s"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:23 www/views/gl-sdk4-ui-mudi-volte.common.js:88
+#: www/luci-static/resources/view/mudi-volte/overview.js:23 www/views/gl-sdk4-ui-mudi-volte.common.js:95
 msgid "starting"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:24 www/views/gl-sdk4-ui-mudi-volte.common.js:89
+#: www/luci-static/resources/view/mudi-volte/overview.js:24 www/views/gl-sdk4-ui-mudi-volte.common.js:96
 msgid "waiting for the modem and 4G"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:25 www/views/gl-sdk4-ui-mudi-volte.common.js:90
+#: www/luci-static/resources/view/mudi-volte/overview.js:25 www/views/gl-sdk4-ui-mudi-volte.common.js:97
 msgid "opening the connection to the operator"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:26 www/views/gl-sdk4-ui-mudi-volte.common.js:91
+#: www/luci-static/resources/view/mudi-volte/overview.js:26 www/views/gl-sdk4-ui-mudi-volte.common.js:98
 msgid "registering with the operator"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:27 www/views/gl-sdk4-ui-mudi-volte.common.js:92
+#: www/luci-static/resources/view/mudi-volte/overview.js:27 www/views/gl-sdk4-ui-mudi-volte.common.js:99
 msgid "recovering after a failure"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:28 www/views/gl-sdk4-ui-mudi-volte.common.js:93
+#: www/luci-static/resources/view/mudi-volte/overview.js:28 www/views/gl-sdk4-ui-mudi-volte.common.js:100
 msgid "restarting the radio"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:29 www/views/gl-sdk4-ui-mudi-volte.common.js:94
+#: www/luci-static/resources/view/mudi-volte/overview.js:29 www/views/gl-sdk4-ui-mudi-volte.common.js:101
 msgid "the radio is off (airplane mode)"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:30 www/views/gl-sdk4-ui-mudi-volte.common.js:95
+#: www/luci-static/resources/view/mudi-volte/overview.js:30 www/views/gl-sdk4-ui-mudi-volte.common.js:102
 msgid "stopped"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:36 www/luci-static/resources/view/mudi-volte/overview.js:56 usr/lib/oui-httpd/rpc/mudi-volte:122
+#: www/luci-static/resources/view/mudi-volte/overview.js:36 www/luci-static/resources/view/mudi-volte/overview.js:56 usr/lib/oui-httpd/rpc/mudi-volte:126
 msgid "exit code %d"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:75 www/views/gl-sdk4-ui-mudi-volte.common.js:99
+#: www/luci-static/resources/view/mudi-volte/overview.js:75 www/views/gl-sdk4-ui-mudi-volte.common.js:106
 msgid "No phone was connected"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:76 www/views/gl-sdk4-ui-mudi-volte.common.js:100
+#: www/luci-static/resources/view/mudi-volte/overview.js:76 www/views/gl-sdk4-ui-mudi-volte.common.js:107
 msgid "Nobody answered"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:77 www/views/gl-sdk4-ui-mudi-volte.common.js:101
+#: www/luci-static/resources/view/mudi-volte/overview.js:77 www/views/gl-sdk4-ui-mudi-volte.common.js:108
 msgid "The caller hung up before the answer"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:78 www/views/gl-sdk4-ui-mudi-volte.common.js:102
+#: www/luci-static/resources/view/mudi-volte/overview.js:78 www/views/gl-sdk4-ui-mudi-volte.common.js:109
 msgid "Declined on a phone"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:79 www/views/gl-sdk4-ui-mudi-volte.common.js:103
+#: www/luci-static/resources/view/mudi-volte/overview.js:79 www/views/gl-sdk4-ui-mudi-volte.common.js:110
 msgid "A phone was busy"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:80 www/views/gl-sdk4-ui-mudi-volte.common.js:104
+#: www/luci-static/resources/view/mudi-volte/overview.js:80 www/views/gl-sdk4-ui-mudi-volte.common.js:111
 msgid "The line was busy with another call"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:81 www/views/gl-sdk4-ui-mudi-volte.common.js:105
+#: www/luci-static/resources/view/mudi-volte/overview.js:81 www/views/gl-sdk4-ui-mudi-volte.common.js:112
 msgid "Not in the list of allowed callers"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:82 www/views/gl-sdk4-ui-mudi-volte.common.js:106
+#: www/luci-static/resources/view/mudi-volte/overview.js:82 www/views/gl-sdk4-ui-mudi-volte.common.js:113
 msgid "Error, see the service log"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:103 www/views/gl-sdk4-ui-mudi-volte.common.js:542
+#: www/luci-static/resources/view/mudi-volte/overview.js:103 www/views/gl-sdk4-ui-mudi-volte.common.js:553
 msgid "No missed calls."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:106 www/luci-static/resources/view/mudi-volte/overview.js:136 www/views/gl-sdk4-ui-mudi-volte.common.js:539 www/views/gl-sdk4-ui-mudi-volte.common.js:553
+#: www/luci-static/resources/view/mudi-volte/overview.js:106 www/luci-static/resources/view/mudi-volte/overview.js:136 www/views/gl-sdk4-ui-mudi-volte.common.js:550 www/views/gl-sdk4-ui-mudi-volte.common.js:564
 msgid "Time"
 msgstr ""
 
@@ -629,39 +669,39 @@ msgstr ""
 msgid "Number"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:108 www/views/gl-sdk4-ui-mudi-volte.common.js:539
+#: www/luci-static/resources/view/mudi-volte/overview.js:108 www/views/gl-sdk4-ui-mudi-volte.common.js:550
 msgid "Why it was missed"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:115 www/views/gl-sdk4-ui-mudi-volte.common.js:540
+#: www/luci-static/resources/view/mudi-volte/overview.js:115 www/views/gl-sdk4-ui-mudi-volte.common.js:551
 msgid "withheld"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:133 www/views/gl-sdk4-ui-mudi-volte.common.js:556
+#: www/luci-static/resources/view/mudi-volte/overview.js:133 www/views/gl-sdk4-ui-mudi-volte.common.js:567
 msgid "No SMS."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:137 www/views/gl-sdk4-ui-mudi-volte.common.js:539 www/views/gl-sdk4-ui-mudi-volte.common.js:553
+#: www/luci-static/resources/view/mudi-volte/overview.js:137 www/views/gl-sdk4-ui-mudi-volte.common.js:550 www/views/gl-sdk4-ui-mudi-volte.common.js:564
 msgid "From"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:138 www/views/gl-sdk4-ui-mudi-volte.common.js:553
+#: www/luci-static/resources/view/mudi-volte/overview.js:138 www/views/gl-sdk4-ui-mudi-volte.common.js:564
 msgid "Message"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:157 www/views/gl-sdk4-ui-mudi-volte.common.js:164
+#: www/luci-static/resources/view/mudi-volte/overview.js:157 www/views/gl-sdk4-ui-mudi-volte.common.js:171
 msgid "%d s"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:159 www/views/gl-sdk4-ui-mudi-volte.common.js:166
+#: www/luci-static/resources/view/mudi-volte/overview.js:159 www/views/gl-sdk4-ui-mudi-volte.common.js:173
 msgid "%d min"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:161 www/views/gl-sdk4-ui-mudi-volte.common.js:168
+#: www/luci-static/resources/view/mudi-volte/overview.js:161 www/views/gl-sdk4-ui-mudi-volte.common.js:175
 msgid "%d h %d min"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:162 www/views/gl-sdk4-ui-mudi-volte.common.js:169
+#: www/luci-static/resources/view/mudi-volte/overview.js:162 www/views/gl-sdk4-ui-mudi-volte.common.js:176
 msgid "%d d %d h"
 msgstr ""
 
@@ -673,83 +713,83 @@ msgstr ""
 msgid "It starts by itself after setup; the log below tells why it stopped."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:177 www/views/gl-sdk4-ui-mudi-volte.common.js:510
+#: www/luci-static/resources/view/mudi-volte/overview.js:177 www/views/gl-sdk4-ui-mudi-volte.common.js:521
 msgid "Online, calls work"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:178 www/views/gl-sdk4-ui-mudi-volte.common.js:512
+#: www/luci-static/resources/view/mudi-volte/overview.js:178 www/views/gl-sdk4-ui-mudi-volte.common.js:523
 msgid "Connecting: %s"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:180 www/luci-static/resources/view/mudi-volte/overview.js:578 www/views/gl-sdk4-ui-mudi-volte.common.js:514 www/views/gl-sdk4-ui-mudi-volte.common.js:529
+#: www/luci-static/resources/view/mudi-volte/overview.js:180 www/luci-static/resources/view/mudi-volte/overview.js:578 www/views/gl-sdk4-ui-mudi-volte.common.js:525 www/views/gl-sdk4-ui-mudi-volte.common.js:540
 msgid "Status"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:180 www/views/gl-sdk4-ui-mudi-volte.common.js:514
+#: www/luci-static/resources/view/mudi-volte/overview.js:180 www/views/gl-sdk4-ui-mudi-volte.common.js:525
 msgid "for %s"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:181 www/views/gl-sdk4-ui-mudi-volte.common.js:516
+#: www/luci-static/resources/view/mudi-volte/overview.js:181 www/views/gl-sdk4-ui-mudi-volte.common.js:527
 msgid "Phone number"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:182 www/views/gl-sdk4-ui-mudi-volte.common.js:517
+#: www/luci-static/resources/view/mudi-volte/overview.js:182 www/views/gl-sdk4-ui-mudi-volte.common.js:528
 msgid "Mobile network"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:183 www/views/gl-sdk4-ui-mudi-volte.common.js:518
+#: www/luci-static/resources/view/mudi-volte/overview.js:183 www/views/gl-sdk4-ui-mudi-volte.common.js:529
 msgid "Phones connected"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:183 www/views/gl-sdk4-ui-mudi-volte.common.js:518
+#: www/luci-static/resources/view/mudi-volte/overview.js:183 www/views/gl-sdk4-ui-mudi-volte.common.js:529
 msgid "none"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:186 www/luci-static/resources/view/mudi-volte/overview.js:579 www/views/gl-sdk4-ui-mudi-volte.common.js:520 www/views/gl-sdk4-ui-mudi-volte.common.js:543
+#: www/luci-static/resources/view/mudi-volte/overview.js:186 www/luci-static/resources/view/mudi-volte/overview.js:579 www/views/gl-sdk4-ui-mudi-volte.common.js:531 www/views/gl-sdk4-ui-mudi-volte.common.js:554
 msgid "Missed calls"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:188 www/views/gl-sdk4-ui-mudi-volte.common.js:522
+#: www/luci-static/resources/view/mudi-volte/overview.js:188 www/views/gl-sdk4-ui-mudi-volte.common.js:533
 msgid "Reconnects to the operator"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:190 www/views/gl-sdk4-ui-mudi-volte.common.js:524
+#: www/luci-static/resources/view/mudi-volte/overview.js:190 www/views/gl-sdk4-ui-mudi-volte.common.js:535
 msgid "Restarts after a crash"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:190 www/views/gl-sdk4-ui-mudi-volte.common.js:524
+#: www/luci-static/resources/view/mudi-volte/overview.js:190 www/views/gl-sdk4-ui-mudi-volte.common.js:535
 msgid "%d in a row"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:192 www/views/gl-sdk4-ui-mudi-volte.common.js:526
+#: www/luci-static/resources/view/mudi-volte/overview.js:192 www/views/gl-sdk4-ui-mudi-volte.common.js:537
 msgid "Last error"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:215 usr/lib/oui-httpd/rpc/mudi-volte:307
+#: www/luci-static/resources/view/mudi-volte/overview.js:215 usr/lib/oui-httpd/rpc/mudi-volte:311
 msgid "UDP on port %s"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:217 usr/lib/oui-httpd/rpc/mudi-volte:309
+#: www/luci-static/resources/view/mudi-volte/overview.js:217 usr/lib/oui-httpd/rpc/mudi-volte:313
 msgid "TLS on port %s with SRTP media encryption (SIP without encryption is off)"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:218 usr/lib/oui-httpd/rpc/mudi-volte:311
+#: www/luci-static/resources/view/mudi-volte/overview.js:218 usr/lib/oui-httpd/rpc/mudi-volte:315
 msgid "TLS on port %s with SRTP media encryption, or UDP on port %s without encryption"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:247 www/views/gl-sdk4-ui-mudi-volte.common.js:545
+#: www/luci-static/resources/view/mudi-volte/overview.js:247 www/views/gl-sdk4-ui-mudi-volte.common.js:556
 msgid "Clear the list"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:249 www/views/gl-sdk4-ui-mudi-volte.common.js:546
+#: www/luci-static/resources/view/mudi-volte/overview.js:249 www/views/gl-sdk4-ui-mudi-volte.common.js:557
 msgid "Incoming calls that no phone answered. Calls cannot reach the router while it has no 4G or is offline; such calls do not show up here."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:275 www/views/gl-sdk4-ui-mudi-volte.common.js:728
+#: www/luci-static/resources/view/mudi-volte/overview.js:275 www/views/gl-sdk4-ui-mudi-volte.common.js:739
 msgid "Connect the phone to this router's Wi-Fi (not the guest network)."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:276 www/views/gl-sdk4-ui-mudi-volte.common.js:729
+#: www/luci-static/resources/view/mudi-volte/overview.js:276 www/views/gl-sdk4-ui-mudi-volte.common.js:740
 msgid "Install Linphone: free on Google Play and the App Store."
 msgstr ""
 
@@ -761,35 +801,35 @@ msgstr ""
 msgid "The same link, to type in instead:"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:285 www/views/gl-sdk4-ui-mudi-volte.common.js:737
+#: www/luci-static/resources/view/mudi-volte/overview.js:285 www/views/gl-sdk4-ui-mudi-volte.common.js:748
 msgid "The code works once, within 15 minutes, and only on this router's network. Do not share it: it signs a phone in. For a new code, close this window and press \"Connect / QR code\" again."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:287 www/views/gl-sdk4-ui-mudi-volte.common.js:739
+#: www/luci-static/resources/view/mudi-volte/overview.js:287 www/views/gl-sdk4-ui-mudi-volte.common.js:750
 msgid "By hand, in any SIP app:"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:289 www/views/gl-sdk4-ui-mudi-volte.common.js:741
+#: www/luci-static/resources/view/mudi-volte/overview.js:289 www/views/gl-sdk4-ui-mudi-volte.common.js:752
 msgid "Username"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:290 www/views/gl-sdk4-ui-mudi-volte.common.js:667 www/views/gl-sdk4-ui-mudi-volte.common.js:742
+#: www/luci-static/resources/view/mudi-volte/overview.js:290 www/views/gl-sdk4-ui-mudi-volte.common.js:678 www/views/gl-sdk4-ui-mudi-volte.common.js:753
 msgid "Password"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:291 www/views/gl-sdk4-ui-mudi-volte.common.js:743
+#: www/luci-static/resources/view/mudi-volte/overview.js:291 www/views/gl-sdk4-ui-mudi-volte.common.js:754
 msgid "Domain"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:292 www/views/gl-sdk4-ui-mudi-volte.common.js:744
+#: www/luci-static/resources/view/mudi-volte/overview.js:292 www/views/gl-sdk4-ui-mudi-volte.common.js:755
 msgid "Transport"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:296 www/views/gl-sdk4-ui-mudi-volte.common.js:747
+#: www/luci-static/resources/view/mudi-volte/overview.js:296 www/views/gl-sdk4-ui-mudi-volte.common.js:758
 msgid "Other phones call and message this one by the name \"%s\" or the short number %s."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:297 www/views/gl-sdk4-ui-mudi-volte.common.js:748
+#: www/luci-static/resources/view/mudi-volte/overview.js:297 www/views/gl-sdk4-ui-mudi-volte.common.js:759
 msgid "Other phones call and message this one by the name \"%s\"."
 msgstr ""
 
@@ -797,19 +837,19 @@ msgstr ""
 msgid "Call or message 600 to check the phone without the mobile network: you hear yourself, a message comes back. On Android let Linphone run without battery restrictions, or calls ring late. On an iPhone, calls ring while Linphone is in the background only with a push account (the linphone.org login in the settings); messages arrive while Linphone is open."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:300 www/views/gl-sdk4-ui-mudi-volte.common.js:752
+#: www/luci-static/resources/view/mudi-volte/overview.js:300 www/views/gl-sdk4-ui-mudi-volte.common.js:763
 msgid "Show on the router's display"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:301 www/luci-static/resources/view/mudi-volte/overview.js:450 www/views/gl-sdk4-ui-mudi-volte.common.js:753
+#: www/luci-static/resources/view/mudi-volte/overview.js:301 www/luci-static/resources/view/mudi-volte/overview.js:450 www/views/gl-sdk4-ui-mudi-volte.common.js:764
 msgid "Close"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:303 www/views/gl-sdk4-ui-mudi-volte.common.js:751
+#: www/luci-static/resources/view/mudi-volte/overview.js:303 www/views/gl-sdk4-ui-mudi-volte.common.js:762
 msgid "Connect the phone \"%s\""
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:310 www/views/gl-sdk4-ui-mudi-volte.common.js:323
+#: www/luci-static/resources/view/mudi-volte/overview.js:310 www/views/gl-sdk4-ui-mudi-volte.common.js:334
 msgid "Shown on the router's display."
 msgstr ""
 
@@ -817,11 +857,11 @@ msgstr ""
 msgid "Could not show the code on the display: %s"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:319 www/views/gl-sdk4-ui-mudi-volte.common.js:330 usr/lib/oui-httpd/rpc/mudi-volte:337
+#: www/luci-static/resources/view/mudi-volte/overview.js:319 www/views/gl-sdk4-ui-mudi-volte.common.js:341 usr/lib/oui-httpd/rpc/mudi-volte:341
 msgid "Phone name: up to 32 letters, digits, dots, dashes or underscores."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:336 www/views/gl-sdk4-ui-mudi-volte.common.js:348
+#: www/luci-static/resources/view/mudi-volte/overview.js:336 www/views/gl-sdk4-ui-mudi-volte.common.js:359
 msgid "Remove the phone \"%s\"? It can no longer sign in."
 msgstr ""
 
@@ -837,23 +877,23 @@ msgstr ""
 msgid "Connected"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:366 www/views/gl-sdk4-ui-mudi-volte.common.js:573
+#: www/luci-static/resources/view/mudi-volte/overview.js:366 www/views/gl-sdk4-ui-mudi-volte.common.js:584
 msgid "yes, encrypted"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:366 www/views/gl-sdk4-ui-mudi-volte.common.js:573
+#: www/luci-static/resources/view/mudi-volte/overview.js:366 www/views/gl-sdk4-ui-mudi-volte.common.js:584
 msgid "yes"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:366 www/views/gl-sdk4-ui-mudi-volte.common.js:573
+#: www/luci-static/resources/view/mudi-volte/overview.js:366 www/views/gl-sdk4-ui-mudi-volte.common.js:584
 msgid "no"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:369 www/views/gl-sdk4-ui-mudi-volte.common.js:580
+#: www/luci-static/resources/view/mudi-volte/overview.js:369 www/views/gl-sdk4-ui-mudi-volte.common.js:591
 msgid "Connect / QR code"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:370 www/views/gl-sdk4-ui-mudi-volte.common.js:581
+#: www/luci-static/resources/view/mudi-volte/overview.js:370 www/views/gl-sdk4-ui-mudi-volte.common.js:592
 msgid "Remove"
 msgstr ""
 
@@ -861,7 +901,7 @@ msgstr ""
 msgid "e.g. pixel"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:381 www/views/gl-sdk4-ui-mudi-volte.common.js:593
+#: www/luci-static/resources/view/mudi-volte/overview.js:381 www/views/gl-sdk4-ui-mudi-volte.common.js:604
 msgid "Add phone"
 msgstr ""
 
@@ -869,7 +909,7 @@ msgstr ""
 msgid "An incoming call rings all connected phones; the first to answer gets it. Phones call and message each other by name or short number, for free and without the SIM; during such a call callers to the SIM hear busy. Adding or removing a phone restarts the service: calls are offline for about 10 seconds."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:393 www/views/gl-sdk4-ui-mudi-volte.common.js:421
+#: www/luci-static/resources/view/mudi-volte/overview.js:393 www/views/gl-sdk4-ui-mudi-volte.common.js:432
 msgid "The modem's own VoLTE gets switched off and the router restarts once: Wi-Fi and the internet are down for 2-3 minutes. Continue?"
 msgstr ""
 
@@ -881,15 +921,15 @@ msgstr ""
 msgid "Switching the modem. If the router restarts, reconnect to its Wi-Fi in 2-3 minutes and open this page again."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:399 www/views/gl-sdk4-ui-mudi-volte.common.js:114
+#: www/luci-static/resources/view/mudi-volte/overview.js:399 www/views/gl-sdk4-ui-mudi-volte.common.js:121
 msgid "The router restarts now: reconnect to its Wi-Fi in 2-3 minutes and open this page again."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:400 www/views/gl-sdk4-ui-mudi-volte.common.js:115
+#: www/luci-static/resources/view/mudi-volte/overview.js:400 www/views/gl-sdk4-ui-mudi-volte.common.js:122
 msgid "Setup failed: %s"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:409 www/views/gl-sdk4-ui-mudi-volte.common.js:430
+#: www/luci-static/resources/view/mudi-volte/overview.js:409 www/views/gl-sdk4-ui-mudi-volte.common.js:441
 msgid "Give VoLTE back to the modem and restart the router? Calls through this router stop until you run the setup again."
 msgstr ""
 
@@ -897,23 +937,23 @@ msgstr ""
 msgid "Giving VoLTE back"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:413 www/views/gl-sdk4-ui-mudi-volte.common.js:118
+#: www/luci-static/resources/view/mudi-volte/overview.js:413 www/views/gl-sdk4-ui-mudi-volte.common.js:125
 msgid "Giving VoLTE back to the modem. Once the modem has taken its settings, the router restarts."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:414 www/views/gl-sdk4-ui-mudi-volte.common.js:119
+#: www/luci-static/resources/view/mudi-volte/overview.js:414 www/views/gl-sdk4-ui-mudi-volte.common.js:126
 msgid "The router restarts with the modem's own VoLTE. Reconnect in 2-3 minutes."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:415 www/views/gl-sdk4-ui-mudi-volte.common.js:120
+#: www/luci-static/resources/view/mudi-volte/overview.js:415 www/views/gl-sdk4-ui-mudi-volte.common.js:127
 msgid "VoLTE is not given back to the modem: %s"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:461 www/views/gl-sdk4-ui-mudi-volte.common.js:414
+#: www/luci-static/resources/view/mudi-volte/overview.js:461 www/views/gl-sdk4-ui-mudi-volte.common.js:425
 msgid "The log is empty."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:487 www/views/gl-sdk4-ui-mudi-volte.common.js:641
+#: www/luci-static/resources/view/mudi-volte/overview.js:487 www/views/gl-sdk4-ui-mudi-volte.common.js:652
 msgid "Settings"
 msgstr ""
 
@@ -921,19 +961,19 @@ msgstr ""
 msgid "Saving the settings restarts the service: calls are offline for about 10 seconds."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:489 www/views/gl-sdk4-ui-mudi-volte.common.js:616
+#: www/luci-static/resources/view/mudi-volte/overview.js:489 www/views/gl-sdk4-ui-mudi-volte.common.js:627
 msgid "Who may call"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:490 www/views/gl-sdk4-ui-mudi-volte.common.js:619
+#: www/luci-static/resources/view/mudi-volte/overview.js:490 www/views/gl-sdk4-ui-mudi-volte.common.js:630
 msgid "Everyone"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:491 www/views/gl-sdk4-ui-mudi-volte.common.js:620
+#: www/luci-static/resources/view/mudi-volte/overview.js:491 www/views/gl-sdk4-ui-mudi-volte.common.js:631
 msgid "Only the numbers below; others are declined"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:493 www/views/gl-sdk4-ui-mudi-volte.common.js:624
+#: www/luci-static/resources/view/mudi-volte/overview.js:493 www/views/gl-sdk4-ui-mudi-volte.common.js:635
 msgid "Allowed callers"
 msgstr ""
 
@@ -945,7 +985,7 @@ msgstr ""
 msgid "A phone number, e.g. +447700900123"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:498 www/views/gl-sdk4-ui-mudi-volte.common.js:625
+#: www/luci-static/resources/view/mudi-volte/overview.js:498 www/views/gl-sdk4-ui-mudi-volte.common.js:636
 msgid "Outgoing calls and SMS"
 msgstr ""
 
@@ -957,7 +997,7 @@ msgstr ""
 msgid "* or prefixes such as +44 +33"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:503 www/views/gl-sdk4-ui-mudi-volte.common.js:626
+#: www/luci-static/resources/view/mudi-volte/overview.js:503 www/views/gl-sdk4-ui-mudi-volte.common.js:637
 msgid "Country code"
 msgstr ""
 
@@ -965,7 +1005,7 @@ msgstr ""
 msgid "For numbers dialled with a leading 0, e.g. 44 for the UK. Setup fills it in from the SIM."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:505 www/views/gl-sdk4-ui-mudi-volte.common.js:627
+#: www/luci-static/resources/view/mudi-volte/overview.js:505 www/views/gl-sdk4-ui-mudi-volte.common.js:638
 msgid "Ring time, seconds"
 msgstr ""
 
@@ -973,7 +1013,7 @@ msgstr ""
 msgid "How long the phones ring before the caller is declined."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:508 www/views/gl-sdk4-ui-mudi-volte.common.js:628
+#: www/luci-static/resources/view/mudi-volte/overview.js:508 www/views/gl-sdk4-ui-mudi-volte.common.js:639
 msgid "SMS on the phones"
 msgstr ""
 
@@ -981,19 +1021,19 @@ msgstr ""
 msgid "New SMS go to every phone as messages (the chat in Linphone), and a message from a phone to a number goes out as an SMS. Off: SMS stay on the router."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:511 www/views/gl-sdk4-ui-mudi-volte.common.js:631
+#: www/luci-static/resources/view/mudi-volte/overview.js:511 www/views/gl-sdk4-ui-mudi-volte.common.js:642
 msgid "Encrypted calls"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:511 www/views/gl-sdk4-ui-mudi-volte.common.js:634
+#: www/luci-static/resources/view/mudi-volte/overview.js:511 www/views/gl-sdk4-ui-mudi-volte.common.js:645
 msgid "SIP over TLS and SRTP audio for phones set up by QR code. A phone set up before calls without encryption until you scan its code again."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:514 www/views/gl-sdk4-ui-mudi-volte.common.js:636
+#: www/luci-static/resources/view/mudi-volte/overview.js:514 www/views/gl-sdk4-ui-mudi-volte.common.js:647
 msgid "SIP without encryption"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:514 www/views/gl-sdk4-ui-mudi-volte.common.js:639
+#: www/luci-static/resources/view/mudi-volte/overview.js:514 www/views/gl-sdk4-ui-mudi-volte.common.js:650
 msgid "UDP and TCP next to TLS, for phones set up by hand or before encryption came. Off: TLS only, every phone is set up by QR code, and nothing a phone signs can be read off the Wi-Fi."
 msgstr ""
 
@@ -1005,7 +1045,7 @@ msgstr ""
 msgid "iOS stops Linphone in the background, and Android may stop it too (battery savers, some phone makers). Then only a push from Linphone's makers wakes it for a call. The router asks their server (subscribe.linphone.org) to send it, signed with a free linphone.org account, and only when the phone has no connection; only the phone's push token and a random call ID leave the router. Empty: no pushes, an iPhone gets calls only while Linphone is open."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:519 www/views/gl-sdk4-ui-mudi-volte.common.js:666
+#: www/luci-static/resources/view/mudi-volte/overview.js:519 www/views/gl-sdk4-ui-mudi-volte.common.js:677
 msgid "e.g. myname, without @sip.linphone.org"
 msgstr ""
 
@@ -1021,7 +1061,7 @@ msgstr ""
 msgid "Press \"Show log\"."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:537 usr/share/luci/menu.d/luci-app-mudi-volte.json:3 www/views/gl-sdk4-ui-mudi-volte.common.js:770
+#: www/luci-static/resources/view/mudi-volte/overview.js:537 usr/share/luci/menu.d/luci-app-mudi-volte.json:3 www/views/gl-sdk4-ui-mudi-volte.common.js:781
 msgid "Calls & SMS"
 msgstr ""
 
@@ -1029,19 +1069,19 @@ msgstr ""
 msgid "Calls to and from the SIM in this router, on phones connected to its Wi-Fi (Linphone or another SIP app)."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:544 www/views/gl-sdk4-ui-mudi-volte.common.js:700
+#: www/luci-static/resources/view/mudi-volte/overview.js:544 www/views/gl-sdk4-ui-mudi-volte.common.js:711
 msgid "Set up"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:545 www/views/gl-sdk4-ui-mudi-volte.common.js:701
+#: www/luci-static/resources/view/mudi-volte/overview.js:545 www/views/gl-sdk4-ui-mudi-volte.common.js:712
 msgid "Setup checks the router, the modem and the SIM, creates a phone account and switches the modem to its \"External VoLTE Stack\" mode with voice over IMS only, so that calls to the SIM reach this router and the network never moves them to 3G. The router restarts once (2-3 minutes without Wi-Fi and internet). The SIM's operator must offer VoLTE on it."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:546 www/views/gl-sdk4-ui-mudi-volte.common.js:703
+#: www/luci-static/resources/view/mudi-volte/overview.js:546 www/views/gl-sdk4-ui-mudi-volte.common.js:714
 msgid "Set up and restart the router"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:581 www/views/gl-sdk4-ui-mudi-volte.common.js:558
+#: www/luci-static/resources/view/mudi-volte/overview.js:581 www/views/gl-sdk4-ui-mudi-volte.common.js:569
 msgid "SMS"
 msgstr ""
 
@@ -1049,11 +1089,11 @@ msgstr ""
 msgid "Messages to the SIM, newest first; with \"SMS on the phones\" on, new ones also go to every phone as messages. The operator delivers most of them to the modem, and the SMS page of the GL admin panel keeps them: delete them there."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:585 www/views/gl-sdk4-ui-mudi-volte.common.js:586
+#: www/luci-static/resources/view/mudi-volte/overview.js:585 www/views/gl-sdk4-ui-mudi-volte.common.js:597
 msgid "Phones"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:588 www/views/gl-sdk4-ui-mudi-volte.common.js:680
+#: www/luci-static/resources/view/mudi-volte/overview.js:588 www/views/gl-sdk4-ui-mudi-volte.common.js:691
 msgid "Service log"
 msgstr ""
 
@@ -1061,202 +1101,202 @@ msgstr ""
 msgid "Show log"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:593 www/views/gl-sdk4-ui-mudi-volte.common.js:690
+#: www/luci-static/resources/view/mudi-volte/overview.js:593 www/views/gl-sdk4-ui-mudi-volte.common.js:701
 msgid "Give VoLTE back to the modem"
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:594 www/views/gl-sdk4-ui-mudi-volte.common.js:691
+#: www/luci-static/resources/view/mudi-volte/overview.js:594 www/views/gl-sdk4-ui-mudi-volte.common.js:702
 msgid "Restores the modem settings saved during setup and restarts the router. Calls then go to the modem's own VoLTE again, and this page offers the setup."
 msgstr ""
 
-#: www/luci-static/resources/view/mudi-volte/overview.js:595 www/views/gl-sdk4-ui-mudi-volte.common.js:693
+#: www/luci-static/resources/view/mudi-volte/overview.js:595 www/views/gl-sdk4-ui-mudi-volte.common.js:704
 msgid "Restore and restart"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:113
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:120
 msgid "If the router restarts, reconnect to its Wi-Fi in 2-3 minutes and open this page again."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:142
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:149
 msgid "exit code %s"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:149 www/views/gl-sdk4-ui-mudi-volte.common.js:279
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:156 www/views/gl-sdk4-ui-mudi-volte.common.js:290
 msgid "failed"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:294
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:305
 msgid "The list is empty."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:351
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:362
 msgid "Removed."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:371 www/views/gl-sdk4-ui-mudi-volte.common.js:386
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:382 www/views/gl-sdk4-ui-mudi-volte.common.js:397
 msgid "Saved. The service restarts: calls are offline for about 10 seconds."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:381
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:392
 msgid "Login: the name of the linphone.org account, without @sip.linphone.org."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:394
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:405
 msgid "Turn pushes off? iPhones then get calls only while Linphone is open, Android phones while its service runs."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:397
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:408
 msgid "Pushes off. The service restarts: calls are offline for about 10 seconds."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:407
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:418
 msgid "Restarting: calls are offline for about 10 seconds."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:508
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:519
 msgid "The service is not running"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:531
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:542
 msgid "Restart the service"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:532
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:543
 msgid "It starts by itself after setup; the service log below tells why it stopped."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:561
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:572
 msgid "New SMS also go to every phone as messages (the chat in Linphone); a message from a phone to a number goes out as an SMS. The SMS page of this admin panel keeps the messages the modem received: delete them there."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:562
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:573
 msgid "SMS stay on the router (SMS on the phones is off in the settings). The SMS page of this admin panel keeps the messages the modem received: delete them there."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:577
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:588
 msgid "Short number %s · connected: %s"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:577
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:588
 msgid "No short number · connected: %s"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:585
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:596
 msgid "No phones yet."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:590
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:601
 msgid "New phone, e.g. pixel"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:595
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:606
 msgid "An incoming call rings all connected phones; the first to answer gets it. Phones call and message each other by name or short number, for free and without the SIM. Adding or removing a phone restarts the service: calls are offline for about 10 seconds."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:624
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:635
 msgid "Full numbers, e.g. +447700900123 +33639981234"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:625
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:636
 msgid "* = any number, or prefixes: +44 +33"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:626
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:637
 msgid "For numbers with a leading 0, e.g. 44"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:643
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:654
 msgid "Reset"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:644
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:655
 msgid "Apply"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:646
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:657
 msgid "Applying restarts the service: calls are offline for about 10 seconds."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:664
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:675
 msgid "Push notifications"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:665
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:676
 msgid "iOS stops Linphone in the background, and Android may stop it too (battery savers, some phone makers). Then only a push from Linphone's makers wakes it for a call. The router asks their server (subscribe.linphone.org) to send it, signed with a free linphone.org account, and only when the phone has no connection: Linphone on Android normally keeps one and rings at once. Only the phone's push token and a random call ID leave the router, not the caller's number."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:666
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:677
 msgid "linphone.org login"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:668
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:679
 msgid "Saved; leave empty to keep it"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:668
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:679
 msgid "The password of that account"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:670 usr/sbin/mudi-volte:882
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:681 usr/sbin/mudi-volte:986
 msgid "Phones that can be woken: %s"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:670
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:681
 msgid "Phones that can be woken: none yet. A phone appears here once its Linphone has signed in."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:671
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:682
 msgid "Pushes are off: an iPhone gets calls only while Linphone is open. A free account: subscribe.linphone.org."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:673
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:684
 msgid "Turn off"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:674
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:685
 msgid "Save"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:682
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:693
 msgid "Show the service log"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:719
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:730
 msgid "Starting…"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:730
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:741
 msgid "In Linphone choose \"Scan QR code\" (in the assistant at first start, or under \"Fetch remote configuration\") and scan this code. Linphone sets up the account by itself."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:736
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:747
 msgid "The same link, to type in instead: "
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:749
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:760
 msgid "Call or message 600 to check the phone without the mobile network: you hear yourself, a message comes back. On Android let Linphone run without battery restrictions, or calls ring late. On an iPhone, calls ring while Linphone is in the background only with a push account (Push notifications on this page); messages arrive while Linphone is open."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:762
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:773
 msgid "Please confirm"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:763
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:774
 msgid "Cancel"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:764
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:775
 msgid "Continue"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:771
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:782
 msgid "Calls and SMS to and from the SIM in this router, on phones connected to its Wi-Fi (Linphone or another SIP app)."
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:774
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:785
 msgid "Loading…"
 msgstr ""
 
-#: www/views/gl-sdk4-ui-mudi-volte.common.js:776
+#: www/views/gl-sdk4-ui-mudi-volte.common.js:787
 msgid "Cannot reach the mudi-volte service on the router."
 msgstr ""

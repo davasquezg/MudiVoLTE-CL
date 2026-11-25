@@ -397,6 +397,32 @@ func TestOutboundCall(t *testing.T) {
 	n.waitState(StateEnded)
 }
 
+// An emergency call to a service URN: the URN is the Request-URI, the dialled
+// number stays in To, and the INVITE repeated for a 422 keeps the URN.
+func TestOutboundServiceURN(t *testing.T) {
+	n := newNet(t)
+	c, err := n.m.DialURI("urn:service:sos.police", "133", netip.MustParseAddrPort("127.0.0.1:41008"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv := n.recv(sip.INVITE)
+	if inv.req.Recipient.String() != "urn:service:sos.police" || headerValue(inv.req, "To") != "<tel:133>" {
+		t.Errorf("INVITE:\n%s", inv.req)
+	}
+	respond(inv, 422, "Session Interval Too Small", "x", map[string]string{"Min-SE": "3600"}, "")
+	n.recv(sip.ACK)
+	inv2 := n.recv(sip.INVITE)
+	if inv2.req.Recipient.String() != "urn:service:sos.police" || headerValue(inv2.req, "To") != "<tel:133>" {
+		t.Errorf("second INVITE:\n%s", inv2.req)
+	}
+	respond(inv2, 380, "Alternative Service", "y", nil, "")
+	n.recv(sip.ACK)
+	n.waitState(StateEnded)
+	if _, cause := c.State(); cause != "380 Alternative Service" {
+		t.Errorf("cause %q", cause)
+	}
+}
+
 func TestOutboundBusyAndCancel(t *testing.T) {
 	n := newNet(t)
 	c, err := n.m.Dial("tel:+447700900003", netip.MustParseAddrPort("127.0.0.1:41002"))

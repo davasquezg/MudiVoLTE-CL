@@ -51,6 +51,57 @@ The XFRM test of
 touches the modem, the IMS side or the phones should be tried on a Mudi 7 as
 well; say in the pull request what you tried it on.
 
+On Windows (Git Bash) part of this runs too:
+
+- Go: `volte/auth`, `volte/media`, `volte/media/g722` and `volte/srtp` test
+  natively. `volte/ipsec` builds on Windows too, but two of its tests
+  (`TestRemoveOwnedThroughIP*`) fail there because they run a stub `ip`
+  shell script; the rest of `volte` and the daemon build only for Linux, so
+  run `go test ./auth/ ./media/... ./srtp/` rather than `go test ./...`.
+  `GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go vet ./...` in `volte/` and
+  `src/imsd/` type-checks them; their tests run in CI (or on a Linux host).
+- `lifecycle.test.py` runs with the Windows Python
+  (`python -I package/tests/lifecycle.test.py`) and a `busybox` on `PATH`.
+  A `busybox.cmd` that drops its first argument (`ash`) and starts Git's
+  `sh.exe` will do:
+
+  ```bat
+  @echo off
+  shift
+  "C:\Program Files\Git\usr\bin\sh.exe" %1 %2 %3 %4 %5 %6 %7 %8 %9
+  ```
+
+  The one test that needs POSIX process ids is skipped there.
+- `sh package/tests/run.sh` works as is with node and npm on `PATH`.
+- `.gitattributes` keeps every text file on LF, also with
+  `core.autocrlf=true`. A checkout made before that file came still has CRLF
+  files; `git rm --cached -r -q . && git reset -q --hard` (on a clean tree)
+  checks them out again with LF. Build packages only from an LF tree: the
+  scripts would reach the router with CR otherwise.
+
+The CI (`.github/workflows/ci.yml`) runs all of the above on every push to
+`main` and every pull request, and on request for any branch: Actions > CI >
+Run workflow, or `gh workflow run ci.yml --ref BRANCH`. On a fork, GitHub
+runs no workflows until they are enabled in its Actions tab.
+
+## Releases
+
+`.github/workflows/release.yml` builds and publishes a release: the static
+build runs in a Debian 13 (trixie) container on GitHub's arm64 runner, then
+`package/build.sh` makes `dist/` with `install.sh` pointing at the release,
+and the release gets every file of `dist/` (the `.ipk`, the translation
+packages, `install.sh`, `SHA256SUMS`) with the version's section of
+`CHANGELOG.md` as its notes. To make one:
+
+1. Set the version in `package/VERSION` (the fork's scheme is in
+   [CHANGELOG.md](CHANGELOG.md)) and give its section in `CHANGELOG.md` and
+   `CHANGELOG.es.md` the date; commit on `main`.
+2. Tag that commit `v` + the version and push the tag:
+   `git tag v0.2.0.1 && git push origin v0.2.0.1`. A tag that does not match
+   `package/VERSION` stops the workflow.
+3. A failed run can be repeated for the same tag: Actions > Release > Run
+   workflow; it replaces the files of an existing release.
+
 ## Code
 
 - Go is formatted with `gofmt`; shell scripts pass `shellcheck`; comments and
@@ -82,7 +133,20 @@ After changing texts:
 python3 package/toolchain/i18n.py extract   # sources → package/po/templates/mudi-volte.pot
 python3 package/toolchain/i18n.py update    # .pot → package/po/<lang>/mudi-volte.po
 python3 package/toolchain/i18n.py check     # every text translated, placeholders match
+python3 package/tests/i18n.test.py          # the tests of the screen check
 ```
+
+`check` also compares `package/po/<lang>/mudi-screen-volte.tsv` with the texts
+that the screen app (`usr/share/mudi-screen/apps/volte/app.sh`) can print, and
+names those without a line in it. It reads `app.sh` by its forms, not as a
+shell: the values of `json_add_string` with the keys `title`, `subtitle`,
+`text`, `label`, `value`, `confirm` and `confirm_label`, the label and value of
+`info` and `section`, what `echo` prints to standard output (`phase_text`,
+`ago`, the answer to an action), the values given to the variables these show
+and the defaults of `${var:-default}`. Variable parts (`$var`, `$(...)`,
+`$((...))`, `{elapsed:...}`) become `{}`; a variable alone, or only names such
+as `VoLTE`, is no text. A text printed in another way (`printf`, a
+here-document) is not seen: keep `app.sh` to these forms.
 
 A new language: copy the header of `package/po/es/mudi-volte.po` into
 `package/po/<lang>/mudi-volte.po`, run `update`, fill in every `msgstr`, and
