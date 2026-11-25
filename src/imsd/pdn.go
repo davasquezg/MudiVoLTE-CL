@@ -202,8 +202,8 @@ func parseIMSProfile(out string) int {
 // NR Cell Identity (NCI) 9. The QENG reply format varies (the state/RAT field
 // is sometimes there and sometimes not: transient modem states), so we parse
 // by the "LTE" or "NR5G-SA" TOKEN, not by indices, and make up to 3 attempts
-// with a pause. homeMCC and homeMNCLen come from the SIM (see plmnMNC).
-func servingCellANI(ctx context.Context, link *ATLink, homeMCC string, homeMNCLen int) (string, error) {
+// with a pause. homeMCC and homeMNC come from the SIM (see plmnMNC).
+func servingCellANI(ctx context.Context, link *ATLink, homeMCC, homeMNC string) (string, error) {
 	var out string
 	var err error
 	const cmd = `AT+QENG="servingcell"`
@@ -212,7 +212,7 @@ func servingCellANI(ctx context.Context, link *ATLink, homeMCC string, homeMNCLe
 		if err != nil {
 			return "", err
 		}
-		ani, perr := parseQENGANI(out, homeMCC, homeMNCLen)
+		ani, perr := parseQENGANI(out, homeMCC, homeMNC)
 		if perr == nil {
 			return ani, nil
 		}
@@ -234,12 +234,12 @@ type servingCell struct {
 	tac, id  string // hex: the TAC and the ECI (LTE) or the NCI (NR)
 }
 
-func parseQENGANI(out, homeMCC string, homeMNCLen int) (string, error) {
+func parseQENGANI(out, homeMCC, homeMNC string) (string, error) {
 	c, err := parseQENGCell(out)
 	if err != nil {
 		return "", err
 	}
-	return c.ani(homeMCC, homeMNCLen)
+	return c.ani(homeMCC, homeMNC)
 }
 
 func parseQENGCell(out string) (servingCell, error) {
@@ -311,7 +311,7 @@ func parseQENGCell(out string) (servingCell, error) {
 }
 
 // ani builds the P-Access-Network-Info value of the cell (see servingCellANI).
-func (c servingCell) ani(homeMCC string, homeMNCLen int) (string, error) {
+func (c servingCell) ani(homeMCC, homeMNC string) (string, error) {
 	padHex := func(v string, n int) (string, error) {
 		v = strings.ToUpper(v)
 		if len(v) > n || !isHex(v) {
@@ -333,27 +333,28 @@ func (c servingCell) ani(homeMCC string, homeMNCLen int) (string, error) {
 	}
 	// The MCC is always 3 digits; the modem prints it so ("001", "460").
 	mcc := strings.Repeat("0", 3-len(c.mcc)) + c.mcc
-	cellID := mcc + plmnMNC(c.mnc, mcc, homeMCC, homeMNCLen) + tacHex + idHex
+	cellID := mcc + plmnMNC(c.mnc, mcc, homeMCC, homeMNC) + tacHex + idHex
 	return access + c.duplex + ";utran-cell-id-3gpp=" + cellID, nil
 }
 
 // plmnMNC gives the MNC the number of digits TS 24.229 §7.2A.4 asks for (2 or
-// 3). Every capture we know of prints it as a string with its leading zeros
-// ("00", "01", "260"), but a firmware that printed it as a number would make
-// "01" into "1" and the cell ID one digit short (issue #12). The SIM knows the
-// length of the home MNC (EF_AD, through card.MNC): it is used when the cell
-// is in the home country (same MCC), where all MNCs are taken to have that
-// length; elsewhere, or without it, a 1-digit MNC is padded to 2 digits. An
-// MNC is never shortened.
-func plmnMNC(mnc, mcc, homeMCC string, homeMNCLen int) string {
-	want := 2
-	if mcc == homeMCC && (homeMNCLen == 2 || homeMNCLen == 3) {
-		want = homeMNCLen
+// 3, "depending on MCC value"). Every capture we know of prints it as a string
+// with its leading zeros ("00", "01", "260"), and the spec takes it from the
+// cell's ECGI, which is what the modem prints: an MNC of 2 or 3 digits is used
+// as it is. Some countries mix 2- and 3-digit MNCs under one MCC, so the SIM's
+// MNC length cannot tell how long another network's MNC is. Only a 1-digit MNC
+// (a firmware that printed it as a number, "01" -> "1") is ambiguous (issue
+// #12): if, padded to 3 digits, it is the SIM's 3-digit home MNC (EF_AD,
+// through card.MNC) in the home MCC, it gets 3 digits; else 2. An MNC is never
+// shortened.
+func plmnMNC(mnc, mcc, homeMCC, homeMNC string) string {
+	if len(mnc) != 1 {
+		return mnc
 	}
-	if len(mnc) < want {
-		mnc = strings.Repeat("0", want-len(mnc)) + mnc
+	if mcc == homeMCC && len(homeMNC) == 3 && "00"+mnc == homeMNC {
+		return homeMNC
 	}
-	return mnc
+	return "0" + mnc
 }
 
 // lastANI is the last P-Access-Network-Info read from the cell in this run of
@@ -369,7 +370,10 @@ var lastANI struct {
 // the last cell read is used, else the header is left out. volte/reg and
 // volte/call add the header only when it is set; TS 24.229 asks the UE to send
 // it, so a network may reject the REGISTER without it (to verify with the
-// operator), and the warning says so.
+// operator), and the warning says so. The value chosen is fixed in the
+// reg/call config: a reused (possibly stale) or missing PANI stays until the
+// IMS session is rebuilt (the next buildStack), e.g. after the modem was on
+// WCDMA for a moment.
 func resolveANI(ani string, err error, logger *slog.Logger) string {
 	lastANI.Lock()
 	defer lastANI.Unlock()
@@ -378,7 +382,7 @@ func resolveANI(ani string, err error, logger *slog.Logger) string {
 		return ani
 	}
 	if lastANI.v != "" {
-		logger.Warn("serving cell not read, using the last P-Access-Network-Info", "err", err)
+		logger.Warn("serving cell not read, using the last P-Access-Network-Info (it may be stale; kept until the IMS session is rebuilt)", "err", err)
 		return lastANI.v
 	}
 	logger.Warn("serving cell not read, registering without P-Access-Network-Info: the network may reject it", "err", err)

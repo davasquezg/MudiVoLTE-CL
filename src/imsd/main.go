@@ -379,9 +379,9 @@ func buildStack(ctx context.Context, cfg *Config, link *ATLink, env pdnEnv, logg
 	}
 	logger.Info("IMS domain", "domain", ids.Domain, "smsc_on_sim", card.SMSC() != "", "rtp_iface", iface)
 
-	// After the SIM: it gives the length of the MNC for the cell ID (#12). A
+	// After the SIM: it gives the home MNC for a 1-digit cell MNC (#12). A
 	// cell that cannot be read does not stop the line (#7): see resolveANI.
-	ani, err := servingCellANI(ctx, link, card.MCC(), len(card.MNC()))
+	ani, err := servingCellANI(ctx, link, card.MCC(), card.MNC())
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("serving cell: %w", ctx.Err())
 	}

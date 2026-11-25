@@ -24,40 +24,43 @@ func TestParseQENGANICells(t *testing.T) {
 	)
 	sp := fmt.Sprintf
 	cases := []struct {
-		name, out, homeMCC string
-		homeMNCLen         int
-		want               string // "" = an error
+		name, out, homeMCC, homeMNC string
+		want                        string // "" = an error
 	}{
-		{"LTE", sp(lte, "01"), "001", 2, sp(lteW, "01")},
-		{"LTE without the SIM", sp(lte, "01"), "", 0, sp(lteW, "01")},
-		{"NR5G-SA FDD", saF, "001", 2, "3GPP-NR-FDD;utran-cell-id-3gpp=001013C0D121A2B3C4D5"},
-		{"NR5G-SA TDD, short fields, space before the MCC", saT, "001", 2, "3GPP-NR-TDD;utran-cell-id-3gpp=001010004ED000000000"},
-		{"NR5G-SA, 3-digit MNC", sa3, "001", 3, "3GPP-NR-TDD;utran-cell-id-3gpp=001001C94B00C9A82340B"},
-		{"EN-DC: the LTE anchor", nsa, "001", 2, "3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=00101004100DF30C"},
-		// MNC 1 / 01 / 001 (#12): padded to the SIM's length in the home
-		// country, to 2 digits otherwise; never shortened.
-		{"MNC 1, SIM 2 digits", sp(lte, "1"), "001", 2, sp(lteW, "01")},
-		{"MNC 1, SIM 3 digits", sp(lte, "1"), "001", 3, sp(lteW, "001")},
-		{"MNC 1, no SIM length", sp(lte, "1"), "001", 0, sp(lteW, "01")},
-		{"MNC 1, roaming", sp(lte, "1"), "002", 3, sp(lteW, "01")},
-		{"MNC 01, SIM 3 digits", sp(lte, "01"), "001", 3, sp(lteW, "001")},
-		{"MNC 001, SIM 2 digits", sp(lte, "001"), "001", 2, sp(lteW, "001")},
-		{"MNC 001, SIM 3 digits", sp(lte, "001"), "001", 3, sp(lteW, "001")},
-		{"NR5G-SA, MNC 1, SIM 2 digits", strings.Replace(saF, "001,01,", "001,1,", 1), "001", 2,
+		{"LTE", sp(lte, "01"), "001", "01", sp(lteW, "01")},
+		{"LTE without the SIM", sp(lte, "01"), "", "", sp(lteW, "01")},
+		{"NR5G-SA FDD", saF, "001", "01", "3GPP-NR-FDD;utran-cell-id-3gpp=001013C0D121A2B3C4D5"},
+		{"NR5G-SA TDD, short fields, space before the MCC", saT, "001", "01", "3GPP-NR-TDD;utran-cell-id-3gpp=001010004ED000000000"},
+		{"NR5G-SA, 3-digit MNC", sa3, "001", "001", "3GPP-NR-TDD;utran-cell-id-3gpp=001001C94B00C9A82340B"},
+		{"EN-DC: the LTE anchor", nsa, "001", "01", "3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=00101004100DF30C"},
+		// MNC 1 / 01 / 001 (#12): an MNC of 2 or 3 digits is used as the
+		// modem prints it, whatever the SIM says (countries that mix 2- and
+		// 3-digit MNCs); only a 1-digit MNC is padded: to the SIM's 3-digit
+		// home MNC when it is that network, else to 2 digits.
+		{"MNC 1, SIM MNC 01", sp(lte, "1"), "001", "01", sp(lteW, "01")},
+		{"MNC 1, SIM MNC 001", sp(lte, "1"), "001", "001", sp(lteW, "001")},
+		{"MNC 1, SIM MNC 002 (another network)", sp(lte, "1"), "001", "002", sp(lteW, "01")},
+		{"MNC 1, no SIM MNC", sp(lte, "1"), "001", "", sp(lteW, "01")},
+		{"MNC 1, roaming", sp(lte, "1"), "002", "001", sp(lteW, "01")},
+		{"MNC 01, SIM MNC 001", sp(lte, "01"), "001", "001", sp(lteW, "01")},
+		{"MNC 01, SIM MNC 010 (mixed lengths)", sp(lte, "01"), "001", "010", sp(lteW, "01")},
+		{"MNC 001, SIM MNC 01", sp(lte, "001"), "001", "01", sp(lteW, "001")},
+		{"MNC 001, SIM MNC 001", sp(lte, "001"), "001", "001", sp(lteW, "001")},
+		{"NR5G-SA, MNC 1, SIM MNC 01", strings.Replace(saF, "001,01,", "001,1,", 1), "001", "01",
 			"3GPP-NR-FDD;utran-cell-id-3gpp=001013C0D121A2B3C4D5"},
 		// Replies that cannot be parsed.
-		{"no cell", "+QENG: \"servingcell\",\"SEARCH\"\r\nOK\r\n", "001", 2, ""},
-		{"NR5G-NSA line alone", "+QENG: \"NR5G-NSA\",001,01,61,-96,24,-10,425090,1,4,0\r\nOK\r\n", "001", 2, ""},
-		{"NR5G-SA cut short", "+QENG: \"servingcell\",\"NOCONN\",\"NR5G-SA\",\"FDD\",001,01,1A2B3C4D5,721\r\nOK\r\n", "001", 2, ""},
-		{"NR5G-SA TAC over 6 hex", "+QENG: \"servingcell\",\"NOCONN\",\"NR5G-SA\",\"FDD\",001,01,1A2B3C4D5,721,3C0D123,127490,71\r\nOK\r\n", "001", 2, ""},
-		{"NR5G-SA NCI over 9 hex", "+QENG: \"servingcell\",\"NOCONN\",\"NR5G-SA\",\"FDD\",001,01,11A2B3C4D5,721,3C0D12,127490,71\r\nOK\r\n", "001", 2, ""},
-		{"NR5G-SA bad duplex", "+QENG: \"servingcell\",\"NOCONN\",\"NR5G-SA\",\"-\",001,01,1A2B3C4D5,721,3C0D12,127490,71\r\nOK\r\n", "001", 2, ""},
-		{"MNC not digits", sp(lte, "-"), "001", 2, ""},
-		{"MNC of 4 digits", sp(lte, "0001"), "001", 2, ""},
-		{"no +QENG", "OK\r\n", "001", 2, ""},
+		{"no cell", "+QENG: \"servingcell\",\"SEARCH\"\r\nOK\r\n", "001", "01", ""},
+		{"NR5G-NSA line alone", "+QENG: \"NR5G-NSA\",001,01,61,-96,24,-10,425090,1,4,0\r\nOK\r\n", "001", "01", ""},
+		{"NR5G-SA cut short", "+QENG: \"servingcell\",\"NOCONN\",\"NR5G-SA\",\"FDD\",001,01,1A2B3C4D5,721\r\nOK\r\n", "001", "01", ""},
+		{"NR5G-SA TAC over 6 hex", "+QENG: \"servingcell\",\"NOCONN\",\"NR5G-SA\",\"FDD\",001,01,1A2B3C4D5,721,3C0D123,127490,71\r\nOK\r\n", "001", "01", ""},
+		{"NR5G-SA NCI over 9 hex", "+QENG: \"servingcell\",\"NOCONN\",\"NR5G-SA\",\"FDD\",001,01,11A2B3C4D5,721,3C0D12,127490,71\r\nOK\r\n", "001", "01", ""},
+		{"NR5G-SA bad duplex", "+QENG: \"servingcell\",\"NOCONN\",\"NR5G-SA\",\"-\",001,01,1A2B3C4D5,721,3C0D12,127490,71\r\nOK\r\n", "001", "01", ""},
+		{"MNC not digits", sp(lte, "-"), "001", "01", ""},
+		{"MNC of 4 digits", sp(lte, "0001"), "001", "01", ""},
+		{"no +QENG", "OK\r\n", "001", "01", ""},
 	}
 	for _, c := range cases {
-		got, err := parseQENGANI(c.out, c.homeMCC, c.homeMNCLen)
+		got, err := parseQENGANI(c.out, c.homeMCC, c.homeMNC)
 		if c.want == "" {
 			if err == nil {
 				t.Errorf("%s: want an error, got %q", c.name, got)
