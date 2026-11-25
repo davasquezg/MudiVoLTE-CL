@@ -80,6 +80,11 @@ En Windows (Git Bash) también corre una parte de esto:
   paquetes solo desde un árbol con LF: si no, los scripts llegarían al router
   con CR.
 
+El CI (`.github/workflows/ci.yml`) ejecuta todo lo anterior en cada push a
+`main` y en cada pull request, y a pedido en cualquier rama: Actions > CI >
+Run workflow, o `gh workflow run ci.yml --ref RAMA`. En un fork, GitHub no
+ejecuta ningún workflow hasta que se habilitan en su pestaña Actions.
+
 ## Código
 
 - El código Go se formatea con `gofmt`; los scripts de shell pasan `shellcheck`; los comentarios y

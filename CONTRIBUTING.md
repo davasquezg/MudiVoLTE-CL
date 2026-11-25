@@ -76,6 +76,11 @@ On Windows (Git Bash) part of this runs too:
   checks them out again with LF. Build packages only from an LF tree: the
   scripts would reach the router with CR otherwise.
 
+The CI (`.github/workflows/ci.yml`) runs all of the above on every push to
+`main` and every pull request, and on request for any branch: Actions > CI >
+Run workflow, or `gh workflow run ci.yml --ref BRANCH`. On a fork, GitHub
+runs no workflows until they are enabled in its Actions tab.
+
 ## Code
 
 - Go is formatted with `gofmt`; shell scripts pass `shellcheck`; comments and

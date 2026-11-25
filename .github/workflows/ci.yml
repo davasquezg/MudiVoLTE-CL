@@ -1,15 +1,17 @@
-# Checks on every push and pull request: the Go library and the daemon (vet,
+# Checks on every push to main, every pull request and on request (Actions >
+# CI > Run workflow, on any branch): the Go library and the daemon (vet,
 # tests, a cross-build for the router), the data-call helper (its tests
 # against a stand-in for the firmware's library), the shell scripts, the GL
-# admin panel page and the syntax of its Lua. The static release build (musl,
-# AMR-WB linked in) needs an arm64 Debian host and stays with
-# scripts/build-static.sh.
+# admin panel page, the syntax of its Lua and the translations. The static
+# release build (musl, AMR-WB linked in) needs an arm64 Debian host: it runs
+# in release.yml, or by hand with scripts/build-static.sh.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
