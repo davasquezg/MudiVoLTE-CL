@@ -7,11 +7,30 @@ config voip 'main'
 	option incoming 'all'
 	# list allow '+447700900123'
 	# Outgoing calls from the phones: '*' allows any number, or a list of
-	# prefixes such as '+44 +33'.
+	# prefixes such as '+44 +33'. The prefixes match the number in
+	# international form (E.164), after 'country' and 'national_len' have
+	# turned a national number into it: '+56' allows 912345678 dialled in
+	# Chile. A short number (149) must be listed as it is. The emergency
+	# numbers below are always allowed.
 	option dial '*'
-	# Country code for numbers dialled with a leading 0 (e.g. 44 for the UK).
+	# Country code for numbers dialled with a leading 0 (e.g. 44 for the UK),
+	# or, in a country without that 0, dialled with 'national_len' digits.
 	# Filled in by setup from the SIM.
 	option country ''
+	# Digits of a national number dialled without a leading 0, which then gets
+	# '+' and the country code: unset = the country's default (9 for Chile,
+	# 56; none for other countries), -1 = off.
+	# option national_len '9'
+	# Emergency numbers: always allowed whatever 'dial' says, never given the
+	# country code. Unset = the country's list (Chile: 131 132 133 134 136
+	# 137 138 112 911). '=police' (fire, ambulance, marine, mountain) names
+	# the service for emergency_urn. They go out as an ordinary call, NOT an
+	# IMS emergency call: keep a phone with its own SIM for emergencies.
+	# list emergency '133=police'
+	# 1 = address emergency calls to urn:service:sos (RFC 5031), the dialled
+	# number staying in To, instead of tel:<number>. Untested: to verify with
+	# the operator before relying on it.
+	# option emergency_urn '0'
 	# Codecs offered to the phones, best first.
 	option codecs 'G722 PCMU PCMA'
 	# How long the phones ring before the caller is declined, in seconds.

@@ -27,8 +27,11 @@ configuración), el registro y una llamada entrante contestada en un iPhone
 despertado por una notificación push.
 
 > **Antes de empezar.** No se garantiza que los números de emergencia (112, 911,
-> 999 y similares) funcionen a través de MudiVoLTE: mantén un teléfono con su
-> propia SIM para ellos. Ejecutar el cliente IMS del operador en un router puede
+> 999 y similares; en Chile 131 SAMU, 132 Bomberos, 133 Carabineros, 134 PDI,
+> 136, 137 y 138) funcionen a través de MudiVoLTE: mantén un teléfono con su
+> propia SIM para ellos. MudiVoLTE los deja pasar diga lo que diga `dial`, pero
+> los marca como una llamada común, no como una llamada de emergencia IMS (ver
+> [package/README.es.md](package/README.es.md#números)). Ejecutar el cliente IMS del operador en un router puede
 > ir en contra de las condiciones de tu contrato móvil; revísalas. MudiVoLTE es
 > un proyecto personal, probado con un solo operador, y se entrega sin ninguna
 > garantía (ver [LICENSE](LICENSE)).
@@ -280,6 +283,9 @@ uci set mudi-volte.main.incoming=allow
 uci add_list mudi-volte.main.allow='+447700900123'
 # Llamadas salientes solo al Reino Unido y Francia (el valor por defecto '*' permite cualquier número):
 uci set mudi-volte.main.dial='+44 +33'
+# O, en Chile, solo dentro de Chile: 'dial' compara con el formato internacional,
+# y 912345678 marcado en un teléfono cuenta como +56912345678 (país 56):
+# uci set mudi-volte.main.dial='+56'
 uci commit mudi-volte && mudi-volte restart
 ```
 

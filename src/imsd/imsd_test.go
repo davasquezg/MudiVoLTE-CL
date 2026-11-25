@@ -364,17 +364,17 @@ func TestNumberAllowed(t *testing.T) {
 		{"", false},              // empty
 	}
 	for _, tc := range cases {
-		if got := numberAllowed(allow, tc.from); got != tc.want {
+		if got := numberAllowed(allow, tc.from, numberPlan{}); got != tc.want {
 			t.Errorf("numberAllowed(%q) = %v, want %v", tc.from, got, tc.want)
 		}
 	}
-	if numberAllowed(nil, "+995555123456") {
+	if numberAllowed(nil, "+995555123456", numberPlan{}) {
 		t.Error("an empty allow must reject everyone")
 	}
-	if numberAllowed([]string{"456"}, "+995559999456") {
+	if numberAllowed([]string{"456"}, "+995559999456", numberPlan{}) {
 		t.Error("a short entry must not match as a suffix")
 	}
-	if !numberAllowed([]string{"456"}, "456") {
+	if !numberAllowed([]string{"456"}, "456", numberPlan{}) {
 		t.Error("short entry: an exact match must work")
 	}
 }

@@ -23,9 +23,12 @@ SIM or the built-in eSIM active next to the SIM of the line. On 4.10.2: the
 firmware update from 4.10.0 with Keep Settings, registration, and an incoming
 call answered on an iPhone woken by a push.
 
-> **Before you start.** Emergency numbers (112, 911, 999 and the like) are
-> not guaranteed to work through MudiVoLTE: keep a phone with its own SIM for
-> them. Running the operator's IMS client on a router may be against the
+> **Before you start.** Emergency numbers (112, 911, 999 and the like; in
+> Chile 131 SAMU, 132 Bomberos, 133 Carabineros, 134 PDI, 136, 137 and 138)
+> are not guaranteed to work through MudiVoLTE: keep a phone with its own SIM
+> for them. MudiVoLTE lets them through whatever `dial` says, but places them
+> as an ordinary call, not as an IMS emergency call (see
+> [package/README.md](package/README.md#numbers)). Running the operator's IMS client on a router may be against the
 > terms of your mobile contract; check them. MudiVoLTE is a personal project,
 > tested with one operator, and comes without any warranty (see
 > [LICENSE](LICENSE)).
@@ -254,6 +257,9 @@ uci set mudi-volte.main.incoming=allow
 uci add_list mudi-volte.main.allow='+447700900123'
 # Outgoing calls only to the UK and France (the default '*' allows any number):
 uci set mudi-volte.main.dial='+44 +33'
+# Or, in Chile, only within Chile: 'dial' matches the international form, and
+# 912345678 dialled on a phone counts as +56912345678 (country 56):
+# uci set mudi-volte.main.dial='+56'
 uci commit mudi-volte && mudi-volte restart
 ```
 

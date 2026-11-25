@@ -61,6 +61,42 @@ data call and the SMS spool use its subscription).
 The web pages edit the same file. After `uci commit mudi-volte` run
 `mudi-volte restart`.
 
+### Numbers
+
+A number dialled on a phone goes to the network in international form (E.164)
+when the daemon can tell it: `+…` and `00…` as they are; with `country` set, a
+number with a leading 0 gets the country code instead of the 0 (`07700900456`
+→ `+447700900456` for 44), and a number of exactly `national_len` digits gets
+`+` and the country code (`912345678` → `+56912345678`). `national_len`
+defaults from the country: 9 for Chile (56), where every number has 9 digits
+and there is no trunk 0 (after the Wikipedia article on Chilean numbers, not
+checked against a Subtel document); no such rule for other countries. `-1`
+switches it off. Shorter numbers (`149`, the echo test) stay as dialled. A
+9-digit special number (600, 800) gets `+56` as well: whether the network
+takes those in that form is to verify on the router.
+
+- `dial` matches that international form: `'+56'` allows `912345678` and bars
+  `+447700900456`; a short number must be listed as it is (`'+56 149'`). An SMS
+  to a number goes out the same way, as an international number (`To_TOA`).
+- `allow` (incoming calls) reads the list and the caller ID with the same
+  rules, so `+56912345678` on the list matches a caller ID `912345678` and the
+  other way round. Without a country, a caller ID of 9 digits or more also
+  matches the end of a longer entry. A hidden caller never matches.
+- Emergency numbers (`list emergency`; unset = the country's list, for Chile
+  131 SAMU, 132 Bomberos, 133 Carabineros, 134 PDI, 136 Socorro Andino, 137
+  maritime rescue, 138 air rescue, 112 and 911, after Wikipedia, with no
+  official Chilean source found) are always allowed whatever `dial` says, never
+  get the country code, and are logged as `EMERGENCY`. No other country has a
+  default list: add yours with `list emergency`. They go out as an ordinary
+  call to `tel:<number>`, which the network may or may not recognise as an
+  emergency; it is **not** an IMS emergency call (no emergency registration).
+  Help lines (139, 147, 149) are not on the list and follow `dial`.
+- `emergency_urn '1'` addresses them to `urn:service:sos` (RFC 5031; with
+  `'133=police'` in the list, `urn:service:sos.police`) with the dialled number
+  in `To`. Off by default and untested: to verify with the operator. A network
+  that wants an emergency registration may refuse the call (for instance with
+  `380 Alternative Service`), which the phone gets as the call's failure.
+
 ## Languages
 
 The texts are English. A translation package, `mudi-volte-i18n-<lang>` (for

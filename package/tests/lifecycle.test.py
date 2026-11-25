@@ -189,6 +189,50 @@ build_config
         self.assertEqual(self.read("allowed").splitlines(),
                          ['+44 7700 900123', '+1 (555) 100-2222'])
 
+    def test_init_passes_the_number_plan(self):
+        # national_len, the emergency list and emergency_urn reach the sip
+        # block; unset, the daemon takes the country's defaults.
+        init = (ROOT / "package/files/etc/init.d/mudi-volte").read_text()
+        init = init.replace(". /usr/share/libubox/jshn.sh", "")
+        stubs = r'''
+config_get() {
+ case "$3" in
+ national_len) eval "$1=\${NATIONAL_LEN-\$4}" ;;
+ *) eval "$1=\$4" ;;
+ esac
+}
+config_get_bool() { case "$3" in emergency_urn) eval "$1=${URN:-0}" ;; *) eval "$1=\$4" ;; esac; }
+config_foreach() { :; }
+config_list_foreach() {
+ [ "$2" = emergency ] || return 0
+ for e in $EMERGENCY_LIST; do "$3" "$e" "${4:-}"; done
+}
+json_init() { :; }
+json_add_array() { array=$1; }
+json_close_array() { array=; }
+json_add_string() { [ "$array" != emergency ] || printf 'emergency %s\n' "$2" >>"$SB/plan"; }
+json_add_object() { :; }
+json_close_object() { :; }
+json_add_int() { [ "$1" != national_len ] || printf 'national_len %s\n' "$2" >>"$SB/plan"; }
+json_add_boolean() { [ "$1" != emergency_urn ] || printf 'emergency_urn %s\n' "$2" >>"$SB/plan"; }
+json_dump() { :; }
+build_config
+'''
+        cases = [
+            ({}, ["emergency_urn 0"]),
+            ({"NATIONAL_LEN": "9", "EMERGENCY_LIST": "133=police 112", "URN": "1"},
+             ["national_len 9", "emergency 133=police", "emergency 112", "emergency_urn 1"]),
+            ({"NATIONAL_LEN": "-1"}, ["national_len -1", "emergency_urn 0"]),
+            ({"NATIONAL_LEN": "nine"}, ["emergency_urn 0"]),
+            ({"NATIONAL_LEN": "9-"}, ["emergency_urn 0"]),
+        ]
+        for env, want in cases:
+            with self.subTest(env=env):
+                (self.sb / "plan").write_text("")
+                r = self.run_case(init + stubs, **env)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(self.read("plan").splitlines(), want)
+
     def test_setup_requires_the_dsi_api(self):
         for library in ("available", "missing", "missing-symbol"):
             with self.subTest(library=library):
