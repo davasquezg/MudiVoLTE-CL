@@ -967,7 +967,7 @@ class FailedSetup(unittest.TestCase):
         values of setup, as after an earlier setup; the radio cycle is a stub."""
         p = self.sb / "case.sh"
         p.write_text(self.base + '\nradio_cycle() { echo cycle >>"$SB/events"; }\ncmd_setup '
-                     + " ".join(args) + "\n")
+                     + " ".join(args) + "\n", encoding="utf-8", newline="\n")
         return subprocess.run(SHELL + [str(p)], env={**os.environ, "SB": str(self.sb), **EXTERNAL, **env},
                               text=True, capture_output=True, timeout=10)
 
