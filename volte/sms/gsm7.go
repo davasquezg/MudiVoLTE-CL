@@ -52,6 +52,19 @@ func toSeptets(s string) ([]byte, bool) {
 	return out, true
 }
 
+// SeptetLen is how many septets r takes in the GSM 7-bit default alphabet:
+// 1, 2 for a character of the extension table (the escape and its code), 0
+// when the alphabet lacks it and the text needs UCS-2.
+func SeptetLen(r rune) int {
+	if _, ok := gsm7Rev[r]; ok {
+		return 1
+	}
+	if _, ok := gsm7ExtRev[r]; ok {
+		return 2
+	}
+	return 0
+}
+
 func fromSeptets(sep []byte) string {
 	var b strings.Builder
 	for i := 0; i < len(sep); i++ {
