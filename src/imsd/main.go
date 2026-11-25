@@ -299,17 +299,21 @@ func discoverPDN(ctx context.Context, cfg *Config, link *ATLink, profile int, lo
 	} else {
 		logger.Warn("CGCONTRDP", "profile", profile, "err", err)
 	}
-	// The daemon registers over IPv4 only (docs/PROTOCOLS.md §2.3, "IPv6"). A
-	// PDN that CGCONTRDP shows with an IPv6 address and no IPv4 one is named
-	// as such, rather than looked for on the interfaces, unless the config
-	// gives the interface or the address itself.
 	auto := func(v string) bool { return v == "" || v == "auto" }
-	if info.Local == nil && info.Local6 != nil && auto(cfg.Interface) && auto(cfg.LocalIPv4) {
-		return pdnEnv{}, fmt.Errorf("the IMS PDN (APN %q) has only the IPv6 address %s in CGCONTRDP: %w",
-			info.APN, info.Local6, errIPv6Only)
-	}
 	iface, localIP, err := findIMSIface(cfg.Interface, info.Local)
 	if err != nil {
+		// The daemon registers over IPv4 only (docs/PROTOCOLS.md §2.3,
+		// "IPv6"). When no interface with IPv4 is found and CGCONTRDP shows
+		// the PDN with a global IPv6 address and no IPv4 one, the PDN is
+		// named as such, unless the config gives the interface or the
+		// address itself. A PDN whose IPv4 address CGCONTRDP does not show
+		// is still found on the interfaces first; link-local alone is no
+		// IPv6 PDN.
+		if info.Local == nil && info.Local6 != nil && info.Local6.IsGlobalUnicast() &&
+			auto(cfg.Interface) && auto(cfg.LocalIPv4) {
+			return pdnEnv{}, fmt.Errorf("the IMS PDN (APN %q) has only the IPv6 address %s in CGCONTRDP (%v): %w",
+				info.APN, info.Local6, err, errIPv6Only)
+		}
 		return pdnEnv{}, fmt.Errorf("IMS PDN interface: %w", err)
 	}
 	if !auto(cfg.LocalIPv4) {

@@ -468,11 +468,17 @@ y una vez por sesión en el log, con nivel ERROR, como `IMS-PDN: IPv6 only, the 
 
 | Caso | `last_error` (después de `pdn-failed: `) |
 |---|---|
-| CGCONTRDP entrega una dirección IPv6 y ninguna IPv4 (y la configuración no fija `interface` ni `local_ipv4`) | `the IMS PDN (APN "ims") has only the IPv6 address 2001:db8::5 in CGCONTRDP: IMS over IPv6 is not supported: MudiVoLTE registers over IPv4 only` |
+| CGCONTRDP entrega una dirección IPv6 global y ninguna IPv4, y ninguna `rmnet_data*` sin la ruta por defecto tiene IPv4 (la configuración no fija `interface` ni `local_ipv4`) | `the IMS PDN (APN "ims") has only the IPv6 address 2001:db8::5 in CGCONTRDP (no rmnet_data* IMS interface with an IPv4 address …): IMS over IPv6 is not supported: MudiVoLTE registers over IPv4 only` |
 | Hay dirección IPv4, pero los P-CSCF son solo IPv6 (de CGCONTRDP o de `pcscf`) | `the P-CSCFs from CGCONTRDP are IPv6 only (2001:db8:1::20): IMS over IPv6 is not supported: …` |
-| CGCONTRDP no da dirección; una `rmnet_data*` sin la ruta por defecto tiene una dirección IPv6 global y ninguna IPv4 | `IMS PDN interface: no rmnet_data* IMS interface with an IPv4 address: rmnet_data0 has only IPv6 (2001:db8::5), no IPv4 address: IMS over IPv6 is not supported: …` |
+| El ajuste `interface` nombra una `rmnet_data*` con una dirección IPv6 global y ninguna IPv4 | `IMS PDN interface: rmnet_data0 has only IPv6 (2001:db8::5), no IPv4 address: IMS over IPv6 is not supported: …` |
 
-Las direcciones IPv6 link-local (`fe80::/10`) por sí solas no cuentan como PDN IPv6.
+Las direcciones IPv6 link-local (`fe80::/10`) por sí solas no cuentan como PDN IPv6, ni en
+CGCONTRDP ni en la interfaz. Primero se revisan las interfaces: si CGCONTRDP muestra solo IPv6 pero
+una `rmnet_data*` sin la ruta por defecto tiene IPv4, se usa esa, como antes. Sin dirección de
+CGCONTRDP, en modo `auto`, una `rmnet_data*` con solo IPv6 se nombra en el error únicamente como
+pista (`no rmnet_data* IMS interface with an IPv4 address (rmnet_data2 has only IPv6 (2001:db8:ff::1), no IPv4 address)`),
+no como PDN IPv6: puede ser otro PDN mientras el IMS todavía no tiene dirección. Aún no se ha visto
+qué `rmnet_data*` usa el RG650V para un PDN IPv6 (**por verificar en el router**).
 
 **Qué haría falta para IPv6 completo** (funciones exactas; nada de esto está implementado):
 

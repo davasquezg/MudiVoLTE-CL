@@ -91,8 +91,10 @@ func fakeIfaces(t *testing.T, ims []net.Addr) {
 
 func TestFindIMSIfaceIPv6Only(t *testing.T) {
 	fakeIfaces(t, []net.Addr{&net.IPNet{IP: net.ParseIP("fe80::1")}, &net.IPNet{IP: net.ParseIP("2001:db8::5")}})
+	// Auto mode names the IPv6-only interface as a hint, without blaming
+	// IPv6: it may be another PDN.
 	_, _, err := findIMSIface("auto", nil)
-	if !errors.Is(err, errIPv6Only) || !strings.Contains(err.Error(), "rmnet_data0 has only IPv6 (2001:db8::5)") {
+	if err == nil || errors.Is(err, errIPv6Only) || !strings.Contains(err.Error(), "(rmnet_data0 has only IPv6 (2001:db8::5), no IPv4 address)") {
 		t.Errorf("auto: %v", err)
 	}
 	if _, _, err := findIMSIface("rmnet_data0", nil); !errors.Is(err, errIPv6Only) {
@@ -102,6 +104,32 @@ func TestFindIMSIfaceIPv6Only(t *testing.T) {
 	fakeIfaces(t, []net.Addr{&net.IPNet{IP: net.ParseIP("fe80::1")}})
 	if _, _, err := findIMSIface("auto", nil); err == nil || errors.Is(err, errIPv6Only) {
 		t.Errorf("link-local only: %v", err)
+	}
+}
+
+// An IPv6-only rmnet_data* beside one with no address yet (the IMS PDN coming
+// up) is a hint, not errIPv6Only.
+func TestFindIMSIfaceIPv6Beside(t *testing.T) {
+	oldIf, oldAd, oldDef := netIfaces, netAddrs, defaultRouteIface
+	t.Cleanup(func() { netIfaces, netAddrs, defaultRouteIface = oldIf, oldAd, oldDef })
+	netIfaces = func() ([]net.Interface, error) {
+		return []net.Interface{{Name: "rmnet_data0"}, {Name: "rmnet_data1"}, {Name: "rmnet_data2"}}, nil
+	}
+	netAddrs = func(name string) ([]net.Addr, error) {
+		switch name {
+		case "rmnet_data0":
+			return nil, nil
+		case "rmnet_data1":
+			return []net.Addr{&net.IPNet{IP: net.ParseIP("10.181.173.198")}}, nil
+		case "rmnet_data2":
+			return []net.Addr{&net.IPNet{IP: net.ParseIP("2001:db8:ff::1")}}, nil
+		}
+		return nil, errors.New("no such interface")
+	}
+	defaultRouteIface = func() string { return "rmnet_data1" }
+	_, _, err := findIMSIface("auto", nil)
+	if err == nil || errors.Is(err, errIPv6Only) || !strings.Contains(err.Error(), "rmnet_data2 has only IPv6 (2001:db8:ff::1)") {
+		t.Errorf("two rmnet_data* off the default route: %v", err)
 	}
 }
 
@@ -129,14 +157,32 @@ func TestDiscoverPDNIPv6(t *testing.T) {
 		t.Errorf("dual stack: %+v, %v", env, err)
 	}
 
-	// The PDN is IPv6 only in CGCONTRDP.
+	// CGCONTRDP shows only IPv6 (link-local or global) while the IMS
+	// interface has IPv4: the PDN is still found on the interfaces.
+	for _, local6 := range []string{"254.128.0.0.0.0.0.0.0.0.0.0.0.0.0.5", "2001:db8::5"} {
+		link = cgcontrdpLink("+CGCONTRDP: 2,6,\"ims\",\"" + local6 + "\",,,,\"192.0.2.20\"")
+		env, err = discoverPDN(ctx, defaultConfig(), link, 2, quietLog())
+		if err != nil || env.iface != "rmnet_data0" || !env.local.Equal(net.ParseIP("198.51.100.20")) || fmtIPs(env.pcscf) != "192.0.2.20" {
+			t.Errorf("IPv6 in CGCONTRDP, IPv4 on the interface (%s): %+v, %v", local6, env, err)
+		}
+	}
+
+	// The PDN is IPv6 only in CGCONTRDP and on the interface.
+	fakeIfaces(t, []net.Addr{&net.IPNet{IP: net.ParseIP("2001:db8::5")}})
 	link = cgcontrdpLink("+CGCONTRDP: 2,6,\"ims\",\"2001:db8::5\",,,,\"2001:db8:1::20\"")
 	_, err = discoverPDN(ctx, defaultConfig(), link, 2, quietLog())
 	if !errors.Is(err, errIPv6Only) || !strings.Contains(err.Error(), "only the IPv6 address 2001:db8::5") {
 		t.Errorf("IPv6-only PDN: %v", err)
 	}
 
+	// Link-local in CGCONTRDP is no IPv6 PDN: the interface error stays.
+	link = cgcontrdpLink("+CGCONTRDP: 2,6,\"ims\",\"fe80::5\",,,,\"2001:db8:1::20\"")
+	if _, err = discoverPDN(ctx, defaultConfig(), link, 2, quietLog()); err == nil || errors.Is(err, errIPv6Only) {
+		t.Errorf("link-local in CGCONTRDP: %v", err)
+	}
+
 	// An IPv4 address, IPv6 P-CSCFs only.
+	fakeIfaces(t, v4)
 	link = cgcontrdpLink("+CGCONTRDP: 2,6,\"ims\",\"198.51.100.20\",,,,\"2001:db8:1::20\"")
 	_, err = discoverPDN(ctx, defaultConfig(), link, 2, quietLog())
 	if !errors.Is(err, errIPv6Only) || !strings.Contains(err.Error(), "P-CSCFs from CGCONTRDP are IPv6 only (2001:db8:1::20)") {
@@ -151,12 +197,14 @@ func TestDiscoverPDNIPv6(t *testing.T) {
 		t.Errorf("IPv6 P-CSCFs in the config: %v", err)
 	}
 
-	// No CGCONTRDP, an interface with IPv6 only: the interface names the cause.
+	// No CGCONTRDP, an interface with IPv6 only: the interface is named as
+	// a hint, without blaming IPv6 (it may be another PDN).
 	fakeIfaces(t, []net.Addr{&net.IPNet{IP: net.ParseIP("2001:db8::5")}})
 	link = &ATLink{Retries: 1, Run: func(ctx context.Context, cmd string) (string, error) {
 		return "", errors.New("no modem")
 	}}
-	if _, err = discoverPDN(ctx, defaultConfig(), link, 2, quietLog()); !errors.Is(err, errIPv6Only) {
+	if _, err = discoverPDN(ctx, defaultConfig(), link, 2, quietLog()); err == nil || errors.Is(err, errIPv6Only) ||
+		!strings.Contains(err.Error(), "rmnet_data0 has only IPv6 (2001:db8::5)") {
 		t.Errorf("IPv6 only on the interface: %v", err)
 	}
 }

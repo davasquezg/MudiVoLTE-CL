@@ -52,7 +52,9 @@ var defaultRouteIface = func() string {
 // CGCONTRDP) it looks for the interface with that address: the rmnet_dataN
 // numbers of the internet and IMS PDNs swap places (§87). Without an address
 // it takes the first rmnet_data* with IPv4 that does not carry the default
-// route.
+// route. A named interface with IPv6 only gives errIPv6Only; in auto mode an
+// rmnet_data* with IPv6 only is just a hint in the error, since it may be
+// another PDN while the IMS one has no address yet.
 func findIMSIface(cfgName string, want net.IP) (string, net.IP, error) {
 	if cfgName != "" && cfgName != "auto" {
 		ip, err := firstIPv4(cfgName)
@@ -66,15 +68,15 @@ func findIMSIface(cfgName string, want net.IP) (string, net.IP, error) {
 		return "", nil, err
 	}
 	internet := defaultRouteIface()
-	var v6 error // the first rmnet_data* off the default route with IPv6 only
+	var v6 string // the first rmnet_data* off the default route with IPv6 only
 	for _, iface := range ifaces {
 		if !strings.HasPrefix(iface.Name, "rmnet_data") {
 			continue
 		}
 		ip, err := firstIPv4(iface.Name)
 		if err != nil || ip == nil {
-			if v6 == nil && iface.Name != internet && errors.Is(err, errIPv6Only) {
-				v6 = err
+			if v6 == "" && iface.Name != internet && errors.Is(err, errIPv6Only) {
+				v6 = strings.TrimSuffix(err.Error(), ": "+errIPv6Only.Error())
 			}
 			continue
 		}
@@ -92,8 +94,10 @@ func findIMSIface(cfgName string, want net.IP) (string, net.IP, error) {
 	if want != nil {
 		return "", nil, fmt.Errorf("no rmnet_data* has the IMS PDN address %s", want)
 	}
-	if v6 != nil {
-		return "", nil, fmt.Errorf("no rmnet_data* IMS interface with an IPv4 address: %w", v6)
+	// Which rmnet_data* the RG650V uses for an IPv6 PDN has not been seen (to
+	// verify on the router): an IPv6-only one is named, not blamed.
+	if v6 != "" {
+		return "", nil, fmt.Errorf("no rmnet_data* IMS interface with an IPv4 address (%s)", v6)
 	}
 	return "", nil, fmt.Errorf("no rmnet_data* IMS interface with an IPv4 address")
 }
