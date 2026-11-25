@@ -104,6 +104,14 @@ decided within 20 seconds (a later failure then comes to the phone as a
 message). Typing notifications and delivery receipts are accepted and dropped;
 files get `415`.
 
+A text whose characters are all in the GSM 7-bit alphabet goes as
+`Alphabet: UTF-8`, 160 characters per SMS (153 per part of a longer one;
+`€ [ ] { } ^ ~ \ |` count twice). That alphabet has ñ, é, ü, ¿ and ¡, but not á, í, ó or ú: one
+of those sends the whole text as UCS, 70 characters per SMS (67 per part).
+"¿Vienes mañana?" fits in one SMS of 160; "¿Dónde estás?" goes as UCS. That
+GL's smsd really sends ñ and € in the GSM alphabet is still to verify on the
+router (see [docs/PROTOCOLS.md](../docs/PROTOCOLS.md#sms-to-the-phones-100-119)).
+
 ## QR codes and setup links
 
 A phone's QR code links to `http://<router>:8060/p/<token>`, where the router

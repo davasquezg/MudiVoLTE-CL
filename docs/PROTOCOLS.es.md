@@ -1336,6 +1336,30 @@ recibe una segunda SIM en el mismo directorio, bajo `Slot: 2` (§118).
   teléfono siga registrado. Un teléfono ausente recibe el SMS cuando se vuelve a registrar, dentro de
   7 días.
 
+Un mensaje de un teléfono a un número va al spool `outgoing` de smsd tal como lo escribe `sendsms`
+de GL (`queue`). La codificación (`gsmSeptets`, `smsEncoding`, `smsParts`):
+
+- `Alphabet: UTF-8` y el texto tal cual cuando todos sus caracteres están en el alfabeto GSM de 7 bits
+  por defecto o en su tabla de extensión (TS 23.038 §6.2.1, la tabla de `volte/sms/gsm7.go`): ASCII
+  simple salvo el acento grave (backquote), y ñ Ñ é É ü Ü ¿ ¡ à è ì ò ù Ç ä ö Ä Ö Å å Æ æ Ø ø ß £ ¥ § €.
+  160 septetos en un SMS, 153 por parte; `€ [ ] { } ^ ~ \ |` ocupan dos (el escape y el código).
+- `Alphabet: UCS` y UTF-16 big-endian en otro caso: 70 unidades en un SMS, 67 por parte. á í ó ú
+  (y Á Í Ó Ú) no están en el alfabeto por defecto, así que "canción" va en UCS-2.
+- Quedan fuera del alfabeto GSM a propósito, y van en UCS-2 como antes: las mayúsculas griegas y ¤,
+  que ISO-8859-15 no tiene, y el salto de página (form feed). smsd recibe UTF-8 y hace él mismo la
+  conversión a septetos; que pase por ISO-8859-15 (el juego de caracteres de smstools para texto) no
+  está verificado.
+- Una parte termina antes en vez de separar un escape de su carácter o un par sustituto (surrogate
+  pair). smsd divide el texto él mismo; el daemon cuenta las partes solo para el límite (10, si no
+  `513`) y el log.
+- Por verificar en el router: que el smsd de GL envíe un texto UTF-8 con ñ o € en el alfabeto GSM (no
+  en UCS-2, no con `?`), y que el teléfono del otro lado lo muestre bien. La documentación del formato
+  de archivo de smstools3 no se pudo revisar para este cambio.
+- No implementado: la tabla de desplazamiento simple (single shift) nacional española (TS 23.038
+  anexo A.2.2), que pondría también á í ó ú en el alfabeto GSM. Cada parte necesitaría un elemento de
+  idioma nacional en su encabezado de datos de usuario (UDH), y es smsd quien arma los septetos y
+  divide el texto, así que tendría que agregarlo smsd; no se sabe si el smsd de GL puede hacerlo.
+
 Un mensaje de un teléfono a otro, por login o número corto (`textToPhone`), espera al
 destinatario dentro de la propia transacción del remitente:
 
