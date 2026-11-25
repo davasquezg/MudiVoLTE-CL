@@ -9,10 +9,13 @@ first.
 
 ## Reporting a vulnerability
 
-Use GitHub's private vulnerability reporting: the **Security** tab of
-<https://github.com/xarvel/MudiVoLTE>, "Report a vulnerability". If that
-form is not available, open an issue that says only that you have a security
-report and how to reach you; keep the details out of the issue.
+Use GitHub's private vulnerability reporting: the **Security** tab of this
+fork, <https://github.com/davasquezg/MudiVoLTE-CL>, "Report a vulnerability". If
+that form is not available, open an issue in
+<https://github.com/davasquezg/MudiVoLTE-CL/issues> that says only that you have a
+security report and how to reach you; keep the details out of the issue. A
+flaw that is also in the upstream project, <https://github.com/xarvel/MudiVoLTE>,
+concerns its author too: say so in the report.
 
 Please include the version (`mudi-volte version`), the firmware of the router,
 what an attacker needs (a place on the Wi-Fi, a phone account, the admin

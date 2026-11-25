@@ -2,6 +2,11 @@
 
 # MudiVoLTE: llamadas y SMS en el GL.iNet Mudi 7
 
+> Este es un fork de [xarvel/MudiVoLTE](https://github.com/xarvel/MudiVoLTE) adaptado para Chile
+> (eSIM, numeración chilena, español). Sus paquetes y su instalador vienen de
+> las [versiones publicadas de este fork](https://github.com/davasquezg/MudiVoLTE-CL/releases); reporta los
+> problemas con ellos en [sus issues](https://github.com/davasquezg/MudiVoLTE-CL/issues).
+
 El GL.iNet Mudi 7 (GL-E5800) tiene un módem 5G, el Quectel RG650V, que
 oficialmente solo hace datos: las llamadas a su SIM no llegan a ninguna parte.
 MudiVoLTE convierte el router en una línea telefónica para esa SIM. Los teléfonos
@@ -69,7 +74,7 @@ su panel web.
 **2. Ejecuta el instalador.**
 
 ```sh
-wget -qO- https://github.com/xarvel/MudiVoLTE/releases/latest/download/install.sh | sh
+wget -qO- https://github.com/davasquezg/MudiVoLTE-CL/releases/latest/download/install.sh | sh
 ```
 
 **En español.** Si la versión publicada trae el paquete de traducción
@@ -79,11 +84,19 @@ la configuración, la línea de comandos y la página del panel de administraci�
 de GL quedan en español:
 
 ```sh
-wget -qO- https://github.com/xarvel/MudiVoLTE/releases/latest/download/install.sh | MUDI_VOLTE_LANG=es sh
+wget -qO- https://github.com/davasquezg/MudiVoLTE-CL/releases/latest/download/install.sh | MUDI_VOLTE_LANG=es sh
 ```
 
 LuCI y la pantalla del router siguen su propio ajuste de idioma. Detalles en
 [package/README.es.md](package/README.es.md#idiomas).
+
+> **Requiere una versión publicada de este fork.** El paquete en español solo
+> viene en las versiones del fork (las del proyecto original no lo traen, y
+> con ellas el instalador termina con *"no translation for language es in
+> this release"*). Mientras el fork no publique su primera versión en su
+> [página de versiones](https://github.com/davasquezg/MudiVoLTE-CL/releases),
+> los comandos de arriba no encuentran el `install.sh`; hasta entonces, el
+> paquete se puede construir a mano (ver [Compilar desde el código fuente](#compilar-desde-el-código-fuente)).
 
 El instalador comprueba que el router sea un Mudi 7, descarga el paquete,
 verifica su checksum, lo instala e inicia la configuración. La configuración
@@ -128,7 +141,7 @@ Eso es todo. El servicio se inicia por sí solo cada vez que arranca el router.
 
 **Sin internet en el router.** En un computador, descarga `install.sh` y
 `mudi-volte_<version>_aarch64_cortex-a53.ipk` desde la
-[página de releases](https://github.com/xarvel/MudiVoLTE/releases). Copia ambos
+[página de releases](https://github.com/davasquezg/MudiVoLTE-CL/releases). Copia ambos
 al router, inicia sesión y ejecuta el instalador con el archivo del paquete:
 
 ```sh
@@ -349,7 +362,7 @@ por defecto en la actualización en línea), y luego ejecuta el instalador de
 nuevo:
 
 ```sh
-wget -qO- https://github.com/xarvel/MudiVoLTE/releases/latest/download/install.sh | sh
+wget -qO- https://github.com/davasquezg/MudiVoLTE-CL/releases/latest/download/install.sh | sh
 ```
 
 Keep Settings conserva `/etc/config/mudi-volte` y `/etc/mudi-volte`, así que el
@@ -590,8 +603,8 @@ biblioteca del firmware, TCP keep-alive) se omiten ahí. Las pruebas del propio
 `mudi-dsi-helper` también necesitan Linux.
 
 ```sh
-git clone https://github.com/xarvel/MudiVoLTE
-cd MudiVoLTE
+git clone https://github.com/davasquezg/MudiVoLTE-CL
+cd MudiVoLTE-CL
 scripts/build-static.sh   # la primera ejecución también compila el toolchain; pruebas; build/static/
 package/build.sh          # dist/: el .ipk, install.sh y SHA256SUMS
 ```

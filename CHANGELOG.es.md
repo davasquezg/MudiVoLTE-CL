@@ -4,7 +4,9 @@
 
 Cambios notables de MudiVoLTE. La versión está en `package/VERSION`; los
 paquetes y sus checksums están en la
-[página de versiones](https://github.com/xarvel/MudiVoLTE/releases).
+[página de versiones](https://github.com/davasquezg/MudiVoLTE-CL/releases) de este fork. Las
+versiones hasta la 0.2.0 son las del proyecto original,
+[xarvel/MudiVoLTE](https://github.com/xarvel/MudiVoLTE/releases).
 
 ## 0.2.0 (2026-11-23)
 
