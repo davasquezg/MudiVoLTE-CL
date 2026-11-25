@@ -560,7 +560,9 @@ the AMR-WB codec inside, and `mudi-dsi-helper` linked against musl the dynamic
 way: it has to load a library of the firmware. To install your own build, copy
 `dist/install.sh` and the `.ipk` to the router as in "No internet on the
 router" above. `scripts/build-imsd.sh` is a quicker build without the codec,
-for development: its network side offers only G.711.
+for development: its network side offers only G.711. The fork's releases
+are built on GitHub by `.github/workflows/release.yml` (see
+[CONTRIBUTING.md](CONTRIBUTING.md#releases)).
 
 | Directory | Contents |
 |---|---|

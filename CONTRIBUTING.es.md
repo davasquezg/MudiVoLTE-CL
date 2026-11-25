@@ -85,6 +85,26 @@ El CI (`.github/workflows/ci.yml`) ejecuta todo lo anterior en cada push a
 Run workflow, o `gh workflow run ci.yml --ref RAMA`. En un fork, GitHub no
 ejecuta ningún workflow hasta que se habilitan en su pestaña Actions.
 
+## Versiones publicadas
+
+`.github/workflows/release.yml` construye y publica una versión: la
+compilación estática corre en un contenedor de Debian 13 (trixie) en el
+runner arm64 de GitHub, luego `package/build.sh` genera `dist/` con un
+`install.sh` que apunta a esa versión, y la versión publicada recibe todos
+los archivos de `dist/` (el `.ipk`, los paquetes de traducción,
+`install.sh`, `SHA256SUMS`) con la sección de la versión de `CHANGELOG.md`
+como notas. Para publicar una:
+
+1. Fija la versión en `package/VERSION` (el esquema del fork está en
+   [CHANGELOG.es.md](CHANGELOG.es.md)) y ponle la fecha a su sección en
+   `CHANGELOG.md` y `CHANGELOG.es.md`; haz el commit en `main`.
+2. Ponle a ese commit el tag `v` + la versión y sube el tag:
+   `git tag v0.2.0.1 && git push origin v0.2.0.1`. Un tag que no coincide con
+   `package/VERSION` detiene el workflow.
+3. Una ejecución fallida se puede repetir para el mismo tag: Actions >
+   Release > Run workflow; reemplaza los archivos de una versión ya
+   publicada.
+
 ## Código
 
 - El código Go se formatea con `gofmt`; los scripts de shell pasan `shellcheck`; los comentarios y

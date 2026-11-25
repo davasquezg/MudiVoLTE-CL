@@ -615,6 +615,9 @@ forma dinámica: tiene que cargar una biblioteca del firmware. Para instalar tu
 propia compilación, copia `dist/install.sh` y el `.ipk` al router como en "Sin
 internet en el router" más arriba. `scripts/build-imsd.sh` es una compilación
 más rápida sin el códec, para desarrollo: su lado de red ofrece solo G.711.
+Las versiones publicadas del fork se construyen en GitHub con
+`.github/workflows/release.yml` (ver
+[CONTRIBUTING.es.md](CONTRIBUTING.es.md#versiones-publicadas)).
 
 | Directorio | Contenido |
 |---|---|

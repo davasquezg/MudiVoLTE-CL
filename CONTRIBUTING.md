@@ -81,6 +81,24 @@ The CI (`.github/workflows/ci.yml`) runs all of the above on every push to
 Run workflow, or `gh workflow run ci.yml --ref BRANCH`. On a fork, GitHub
 runs no workflows until they are enabled in its Actions tab.
 
+## Releases
+
+`.github/workflows/release.yml` builds and publishes a release: the static
+build runs in a Debian 13 (trixie) container on GitHub's arm64 runner, then
+`package/build.sh` makes `dist/` with `install.sh` pointing at the release,
+and the release gets every file of `dist/` (the `.ipk`, the translation
+packages, `install.sh`, `SHA256SUMS`) with the version's section of
+`CHANGELOG.md` as its notes. To make one:
+
+1. Set the version in `package/VERSION` (the fork's scheme is in
+   [CHANGELOG.md](CHANGELOG.md)) and give its section in `CHANGELOG.md` and
+   `CHANGELOG.es.md` the date; commit on `main`.
+2. Tag that commit `v` + the version and push the tag:
+   `git tag v0.2.0.1 && git push origin v0.2.0.1`. A tag that does not match
+   `package/VERSION` stops the workflow.
+3. A failed run can be repeated for the same tag: Actions > Release > Run
+   workflow; it replaces the files of an existing release.
+
 ## Code
 
 - Go is formatted with `gofmt`; shell scripts pass `shellcheck`; comments and
