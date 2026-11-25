@@ -29,6 +29,49 @@ import (
 // Offer is one ipsec-3gpp algorithm pair we propose in Security-Client.
 type Offer struct{ Alg, Ealg string }
 
+// DefaultOffers is the Security-Client of a Config without Offers, best
+// first: every pair the IPsec layer installs (TS 33.203 Annex H and I). The
+// first is the only pair offered before, and the one the tested network
+// chose; the pairs with encryption come last and need the kernel's cbc(aes)
+// and cbc(des3_ede) ciphers when a P-CSCF picks them.
+var DefaultOffers = []Offer{
+	{"hmac-md5-96", "null"},
+	{"hmac-sha-1-96", "null"},
+	{"hmac-md5-96", "aes-cbc"},
+	{"hmac-sha-1-96", "aes-cbc"},
+	{"hmac-md5-96", "des-ede3-cbc"},
+	{"hmac-sha-1-96", "des-ede3-cbc"},
+}
+
+// String renders the pair as ParseOffer reads it: "alg/ealg".
+func (o Offer) String() string { return o.Alg + "/" + o.Ealg }
+
+// ParseOffer reads an algorithm pair written "alg/ealg", e.g.
+// "hmac-sha-1-96/aes-cbc"; "alg" alone means no encryption (ealg null).
+// Only pairs the IPsec layer can install are accepted.
+func ParseOffer(s string) (Offer, error) {
+	alg, ealg, _ := strings.Cut(strings.ToLower(strings.TrimSpace(s)), "/")
+	o := Offer{Alg: strings.TrimSpace(alg), Ealg: strings.TrimSpace(ealg)}
+	if o.Ealg == "" {
+		o.Ealg = "null"
+	}
+	if err := o.check(); err != nil {
+		return Offer{}, fmt.Errorf("ipsec offer %q: %w", s, err)
+	}
+	return o, nil
+}
+
+// check reports whether the IPsec layer derives keys for the pair.
+func (o Offer) check() error {
+	if _, err := auth.IntegrityKey(o.Alg, make([]byte, 16)); err != nil {
+		return fmt.Errorf("%w (hmac-md5-96 or hmac-sha-1-96)", err)
+	}
+	if _, err := auth.EncryptionKey(o.Ealg, make([]byte, 16)); err != nil {
+		return fmt.Errorf("%w (null, aes-cbc or des-ede3-cbc)", err)
+	}
+	return nil
+}
+
 // Config describes the subscriber and the access network.
 type Config struct {
 	IMPI   string // private identity, e.g. 0010100...@ims.mnc001.mcc001.3gppnetwork.org
@@ -63,7 +106,7 @@ func (c *Config) defaults() {
 		c.Expires = 600000 * time.Second
 	}
 	if len(c.Offers) == 0 {
-		c.Offers = []Offer{{"hmac-md5-96", "null"}}
+		c.Offers = slices.Clone(DefaultOffers)
 	}
 	if c.IPsec == nil {
 		c.IPsec = ipsec.Default()
@@ -170,6 +213,11 @@ func New(cfg Config, s sim.Authenticator, inbound sipnet.Handler) (*Client, erro
 	}
 	if !cfg.UEAddr.IsValid() || !cfg.PCSCF.IsValid() {
 		return nil, errors.New("UEAddr and PCSCF are required")
+	}
+	for _, o := range cfg.Offers {
+		if err := o.check(); err != nil {
+			return nil, fmt.Errorf("ipsec offer %s: %w", o, err)
+		}
 	}
 	return &Client{
 		cfg: cfg, sim: s, inbound: inbound,
@@ -527,7 +575,7 @@ func (c *Client) secure(ctx context.Context, s *session, res *sip.Response, akaR
 	if s.server, err = securityServer(res); err != nil {
 		return err
 	}
-	chosen, err := auth.Choose(s.server)
+	chosen, err := auth.ChooseOffered(s.server, s.client)
 	if err != nil {
 		return err
 	}

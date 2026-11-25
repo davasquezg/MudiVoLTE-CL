@@ -149,6 +149,34 @@ func Choose(server []Mechanism) (Mechanism, error) {
 	return best, nil
 }
 
+// ChooseOffered is Choose among the server mechanisms whose algorithm pair
+// (alg, ealg) is one of offered, our own Security-Client: sec-agree settles
+// on a mechanism both sides list (RFC 3329 §2.3), so a pair left out of the
+// offer on purpose is never installed. ealg "" and "null" are the same.
+func ChooseOffered(server, offered []Mechanism) (Mechanism, error) {
+	var common []Mechanism
+	for _, m := range server {
+		for _, o := range offered {
+			if o.Alg == m.Alg && nullEalg(o.Ealg) == nullEalg(m.Ealg) {
+				common = append(common, m)
+				break
+			}
+		}
+	}
+	m, err := Choose(common)
+	if err != nil {
+		return Mechanism{}, errors.New("the Security-Server has none of the offered ipsec-3gpp mechanisms")
+	}
+	return m, nil
+}
+
+func nullEalg(ealg string) string {
+	if ealg == "" {
+		return "null"
+	}
+	return ealg
+}
+
 // VerifyHeader renders Security-Verify: the Security-Server list echoed verbatim.
 func VerifyHeader(server []Mechanism) string {
 	parts := make([]string, len(server))
