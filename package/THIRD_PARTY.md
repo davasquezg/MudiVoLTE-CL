@@ -10,10 +10,12 @@ G.722 (the codec towards the phones) is the project's own pure-Go
 implementation in `volte/media/g722`, written from ITU-T Recommendation G.722
 (11/88); it carries no third-party code.
 
-The C part of the binary consists only of `libopencore-amrwb.a`,
-`libvo-amrwbenc.a`, musl's `libc.a` and start files, ten objects from GCC's
-`libgcc.a` and GCC's `crtbeginS.o`/`crtendS.o` (checked with a linker map).
-No glibc code is linked.
+The C part of the binary consists only of `libopencore-amrnb.a`,
+`libopencore-amrwb.a`, `libvo-amrwbenc.a`, musl's `libc.a` and start files,
+ten objects from GCC's `libgcc.a` and GCC's `crtbeginS.o`/`crtendS.o`
+(checked with a linker map before `libopencore-amrnb.a` was added; whether
+AMR-NB pulls in further `libgcc.a` objects is to be checked with a linker map
+at the next static build). No glibc code is linked.
 
 | Component | Version | License | Source | Texts |
 |---|---|---|---|---|
@@ -30,12 +32,12 @@ No glibc code is linked.
 | github.com/vishvananda/netlink | v1.3.1 | Apache-2.0 | https://github.com/vishvananda/netlink | `licenses/github.com/vishvananda/netlink/` |
 | github.com/vishvananda/netns | v0.0.5 | Apache-2.0 | https://github.com/vishvananda/netns | `licenses/github.com/vishvananda/netns/` |
 | rsc.io/qr | v0.2.0 | BSD-3-Clause (The Go Authors) | https://github.com/rsc/qr (tag v0.2.0) | `licenses/rsc.io/qr/` |
-| opencore-amr: libopencore-amrwb (AMR-WB decoder) | 0.1.6 (Debian 0.1.6-1) | Apache-2.0 with NOTICE | http://deb.debian.org/debian/pool/main/o/opencore-amr/opencore-amr_0.1.6.orig.tar.gz (project: https://sourceforge.net/projects/opencore-amr/) | `licenses/opencore-amr/` |
+| opencore-amr: libopencore-amrnb (AMR-NB encoder and decoder), libopencore-amrwb (AMR-WB decoder) | 0.1.6 (Debian 0.1.6-1) | Apache-2.0 with NOTICE | http://deb.debian.org/debian/pool/main/o/opencore-amr/opencore-amr_0.1.6.orig.tar.gz (project: https://sourceforge.net/projects/opencore-amr/) | `licenses/opencore-amr/` |
 | vo-amrwbenc (AMR-WB encoder) | 0.1.3 (Debian 0.1.3-2) | Apache-2.0 with NOTICE (VisualOn, Android Open Source Project; the NOTICE also carries the Unicode license) | http://deb.debian.org/debian/pool/main/v/vo-amrwbenc/vo-amrwbenc_0.1.3.orig.tar.gz (project: https://sourceforge.net/projects/opencore-amr/) | `licenses/vo-amrwbenc/` |
 | musl libc | 1.2.5 (Debian 1.2.5-3.1~deb13u1) | MIT (COPYRIGHT lists authors and per-file notices) | http://deb.debian.org/debian/pool/main/m/musl/musl_1.2.5.orig.tar.gz (project: https://musl.libc.org/) | `licenses/musl/` |
 | GCC libgcc.a soft-fp: addtf3, subtf3, multf3, eqtf2, extenddftf2, fixtfsi, fixunstfsi, floatsitf, floatunsitf (128-bit long double used by musl's printf) | 14.2.0 (Debian 14.2.0-19) | LGPL-2.1-or-later with a special exception: the compiled files may be linked into any program and distributed without LGPL restrictions | http://deb.debian.org/debian/pool/main/g/gcc-14/gcc-14_14.2.0.orig.tar.gz, `libgcc/soft-fp/` | `licenses/gcc/soft-fp.NOTICE` |
 | GCC libgcc.a (sfp-exceptions), crtbeginS.o, crtendS.o | 14.2.0 (Debian 14.2.0-19) | GPL-3.0-or-later WITH GCC-exception-3.1 | same tarball, `libgcc/` | `licenses/gcc/COPYING3`, `licenses/gcc/COPYING.RUNTIME` |
 
-The AMR-WB codec sources ship a patent disclaimer ("THIS IS NOT A GRANT OF
+The AMR-WB and AMR-NB codec sources ship a patent disclaimer ("THIS IS NOT A GRANT OF
 PATENT RIGHTS"), included as `patent_disclaimer.txt` in both codec
 directories.

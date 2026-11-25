@@ -12,5 +12,6 @@ and the Required Notice line above. Commercial use needs a separate license
 from the copyright holder.
 
 The repository holds no third-party code. The Go modules named in go.mod and
-the AMR-WB codec libraries that media/amrwb links against (opencore-amr,
-vo-amrwbenc) are used under their own licenses; PROVENANCE.md lists them.
+the AMR-WB and AMR codec libraries that media/amrwb and media/amrnb link
+against (opencore-amr, vo-amrwbenc) are used under their own licenses;
+PROVENANCE.md lists them.

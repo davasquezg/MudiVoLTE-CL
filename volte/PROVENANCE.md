@@ -24,7 +24,7 @@ what the live network does.
 | github.com/emiago/sipgo | BSD-2-Clause | SIP parser, transactions, transport |
 | github.com/damonto/wwan-go | MIT | AT/SIM transport (AT+CSIM) |
 | github.com/vishvananda/netlink (with github.com/vishvananda/netns) | Apache-2.0 | XFRM states and policies through netlink |
-| opencore-amr, vo-amrwbenc | Apache-2.0 | AMR-WB decoder and encoder |
+| opencore-amr, vo-amrwbenc | Apache-2.0 | AMR-WB decoder and encoder, AMR-NB encoder and decoder (opencore-amr) |
 
 ## Log
 
@@ -96,3 +96,10 @@ what the live network does.
   contact), annex L.2.2.1B (a new initial registration after the bearer for
   SIP signalling is lost), §5.4.1.2.1, §5.4.1.2.2 and §5.4.2.1.2 (the new
   registration replaces the old one in the S-CSCF).
+- 2026-11-25: `media`: the AMR (narrowband) payload per RFC 4867 (BE and OA,
+  storage format §5.3; frame sizes from its Table 1, from TS 26.101) shares
+  the packing code with AMR-WB. `media/amrnb` is a cgo binding to the system
+  libopencore-amrnb (Apache-2.0); the Encoder_Interface_* and
+  Decoder_Interface_* prototypes are declared by hand from its public headers
+  (`amrnb/interf_enc.h`, `amrnb/interf_dec.h` of opencore-amr 0.1.6, the
+  Debian orig tarball pinned in `package/toolchain/fetch-and-build.sh`).
